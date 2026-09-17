@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { writePsd } from 'ag-psd'
 import { encodeFlattenedPsd, packBitsRow, patchPsdResolution } from './psdFlat'
 
 /** 구조적 ImageData 팩토리 — Node 환경에 DOM ImageData가 없어 순수 객체로 대체 */
@@ -153,6 +154,22 @@ describe('encodeFlattenedPsd', () => {
       })
     ).toThrow()
   })
+
+  it('비압축성 이미지가 스트립 버퍼를 넘지 않는다 (회귀: Offset is out of bounds)', () => {
+    const W = 64
+    const H = 130
+    const noisy = imageData(W, H, (x, y) => {
+      const v = ((x + y) % 2) * 255
+      return [v, v, v, 255]
+    })
+    let blob: Blob
+    expect(() => {
+      blob = encodeFlattenedPsd({ width: W, height: H, dpi: 350, read: (y, h) => imgDataSlice(noisy, y, h) })
+    }).not.toThrow()
+    expect(blob!).toBeInstanceOf(Blob)
+    // 3채널 × 130행 × 65B(완전 리터럴) = 25,350B — 구버퍼(채널 1개분)였다면 RangeError
+    expect(blob!.size).toBeGreaterThan(25_350)
+  })
 })
 
 function imgDataSlice(full: ImageData, y: number, h: number): ImageData {
@@ -238,5 +255,24 @@ describe('patchPsdResolution', () => {
     const found = findRes1005(patched)
     expect(found?.dpi).toBe(350)
     expect(patched.subarray(patched.length - 4)).toEqual(new Uint8Array([0xde, 0xad, 0xbe, 0xef]))
+  })
+
+  it('ag-psd 실산출 버퍼도 파싱·패치된다 (레이어 PSD 경로 회귀)', () => {
+    const W = 4
+    const H = 3
+    const composite = imageData(W, H, (x, y) => [x * 40, y * 60, 128, 255])
+    const layer = imageData(2, 2, () => [255, 0, 0, 255])
+    const buffer = writePsd({
+      width: W,
+      height: H,
+      channels: 3,
+      children: [{ name: '레드', left: 1, top: 1, imageData: layer }],
+      imageData: composite
+    })
+    const patched = new Uint8Array(patchPsdResolution(buffer, 350))
+    const found = findRes1005(patched)
+    expect(found?.dpi).toBe(350)
+    expect(patched[0]).toBe(0x38)
+    expect(patched.subarray(patched.length - 4)).toEqual(new Uint8Array(buffer.slice(buffer.byteLength - 4)))
   })
 })

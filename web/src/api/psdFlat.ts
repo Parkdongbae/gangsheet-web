@@ -153,7 +153,7 @@ export function encodeFlattenedPsd(opts: {
     compression,
     countsBytes
   ]
-  const stripBuffer = new Uint8Array(scratchSize(width) * STRIP_ROWS)
+  const stripBuffer = new Uint8Array(scratchSize(width) * STRIP_ROWS * 3)
   for (let y0 = 0; y0 < height; y0 += STRIP_ROWS) {
     const rows = Math.min(STRIP_ROWS, height - y0)
     const strip = read(y0, rows)
