@@ -164,7 +164,12 @@ describe('encodeFlattenedPsd', () => {
     })
     let blob: Blob
     expect(() => {
-      blob = encodeFlattenedPsd({ width: W, height: H, dpi: 350, read: (y, h) => imgDataSlice(noisy, y, h) })
+      blob = encodeFlattenedPsd({
+        width: W,
+        height: H,
+        dpi: 350,
+        read: (y, h) => imgDataSlice(noisy, y, h)
+      })
     }).not.toThrow()
     expect(blob!).toBeInstanceOf(Blob)
     // 3채널 × 130행 × 65B(완전 리터럴) = 25,350B — 구버퍼(채널 1개분)였다면 RangeError
@@ -273,6 +278,8 @@ describe('patchPsdResolution', () => {
     const found = findRes1005(patched)
     expect(found?.dpi).toBe(350)
     expect(patched[0]).toBe(0x38)
-    expect(patched.subarray(patched.length - 4)).toEqual(new Uint8Array(buffer.slice(buffer.byteLength - 4)))
+    expect(patched.subarray(patched.length - 4)).toEqual(
+      new Uint8Array(buffer.slice(buffer.byteLength - 4))
+    )
   })
 })
