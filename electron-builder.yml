@@ -8,7 +8,10 @@ files:
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
-  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,tsconfig.web.tsbuildinfo}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,web/tsconfig.json,tsconfig.web.tsbuildinfo}'
+  # 웹 SPA(web/)·배포 설정·빌드 로그 — 데스크톱 번들 무관 (asar 혼입 시 아카이브 손상)
+  - '!web/**'
+  - '!{vercel.json,build-win.log,smoke-stdout.log,smoke-stderr.log}'
   # 사이드카 소스/가상환경 — extraResources 번들 exe로만 배포 (S7)
   - '!export-sidecar/**'
   # 루트 목업(components/)·에이전트 문서·요약 — 앱 번들 무관
