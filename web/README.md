@@ -47,7 +47,7 @@ Electron에서 수신자가 없는 inert 코드).
 | ----------------------------------- | --------------------------------------------------------------- |
 | 파일 대화상자(`dialog.show*Dialog`) | File System Access API + `<input type=file>` 폴백               |
 | 디스크 원본 파일 경로 참조          | 가상 경로(`dtf-vfs://…`) + IndexedDB Blob 보관                  |
-| .dtf 저장/열기                      | FS Access 쓰기 또는 다운로드 / 업로드 + **자동저장(IndexedDB)** |
+| .dtf 저장/열기 | FS Access 쓰기 또는 다운로드 / 업로드 + **자동저장(IndexedDB)** — 저장 시 **원본을 파일에 내장**(선택적 `assets`)해 데스크톱 exe·다른 브라우저에서 바로 열림 |
 | PNG 저장(Pillow dpi=350)            | Canvas 인코딩 + **pHYs 청크 350 DPI 주입**                      |
 | CMYK PSD 작성(psd-tools + lcms)     | **RGB 8bit PSD**(평면=자체 인코더, 레이어=ag-psd) + 350 DPI     |
 | 배경 제거(rembg AI)                 | **단색(흰색 등) 배경 플러드필 제거** + 외부 AI 사이트 링크      |

@@ -116,6 +116,13 @@ export function registerBlob(name: string, blob: Blob, type = 'image/png'): stri
   return put(sanitizeName(name), blob, type).path
 }
 
+/** 내장 에셋 복원 — 원 경로 그대로 재등록(.dtf assets 로드용, 신규 경로 발급 안 함) */
+export function restoreEntry(path: string, name: string, type: string, blob: Blob): void {
+  const entry: VfsEntry = { path, name, type, blob, addedAt: Date.now() }
+  entries.set(path, entry)
+  persistQuietly(entry)
+}
+
 export function getEntry(path: string): VfsEntry | undefined {
   return entries.get(path)
 }

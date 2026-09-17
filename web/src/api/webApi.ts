@@ -21,17 +21,20 @@ import type {
   UpscaleProgress,
   UpscaledImage
 } from '@shared/ipc'
-import { validateProjectData, type ProjectData } from '@core/project'
+import { validateProjectData, type ProjectAsset, type ProjectData } from '@core/project'
 import type { ExportManifest } from '@workers/exportManifest'
 import * as fsa from './fsAccess'
 import * as ops from './imageOps'
 import {
+  getEntry,
+  has,
   kvGet,
   kvSet,
   loadPersisted,
   registerBlob,
   registerFile,
   requireBlob,
+  restoreEntry,
   vfsFileName
 } from './vfs'
 
@@ -170,6 +173,50 @@ async function buildImported(blob: Blob): Promise<ImportedImage> {
 
 const stripExt = (name: string): string => name.replace(/\.[^.]+$/, '')
 
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (): void => resolve(String(reader.result).split(',')[1] ?? '')
+    reader.onerror = (): void => reject(new Error('에셋 인코딩 실패'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+function base64ToBlob(b64: string, type: string): Blob {
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return new Blob([bytes], { type })
+}
+
+/** 참조 원본을 파일에 내장 — 데스크톱 exe·다른 브라우저에서 여는 상호운용용 */
+async function withEmbeddedAssets(data: ProjectData): Promise<ProjectData> {
+  const assets: ProjectAsset[] = []
+  for (const path of new Set(data.images.map((image) => image.filePath))) {
+    const entry = getEntry(path)
+    if (!entry) continue
+    assets.push({
+      path,
+      name: entry.name,
+      type: entry.type,
+      dataBase64: await blobToBase64(entry.blob)
+    })
+  }
+  return assets.length > 0 ? { ...data, assets } : data
+}
+
+/** 내장 에셋을 VFS에 복원(원 경로 유지)하고 데이터는 링크 형태로 반환 */
+async function restoreEmbeddedAssets(data: ProjectData): Promise<ProjectData> {
+  if (!data.assets || data.assets.length === 0) return data
+  for (const asset of data.assets) {
+    if (has(asset.path)) continue
+    restoreEntry(asset.path, asset.name, asset.type, base64ToBlob(asset.dataBase64, asset.type))
+  }
+  const linked = { ...data }
+  delete linked.assets
+  return linked
+}
+
 function stamp(): string {
   const d = new Date()
   const two = (n: number): string => String(n).padStart(2, '0')
@@ -307,11 +354,14 @@ function createWebApi(): DtfApi {
 
     async saveProject(data: ProjectData, path?: string): Promise<string | null> {
       const normalized = validateProjectData(data)
-      await kvSet(AUTOSAVE_KEY, { data: normalized, savedAt: Date.now() })
+      const embedded = await withEmbeddedAssets(normalized)
+      const linked = { ...embedded }
+      delete linked.assets
+      await kvSet(AUTOSAVE_KEY, { data: linked, savedAt: Date.now() })
 
       if (path === AUTOSAVE_PATH) return AUTOSAVE_PATH
 
-      const blob = new Blob([JSON.stringify(normalized, null, 2)], { type: 'application/json' })
+      const blob = new Blob([JSON.stringify(embedded, null, 2)], { type: 'application/json' })
       if (path !== undefined) {
         const name = /\.dtf$/i.test(path) ? path : `${path}.dtf`
         fsa.downloadBlob(blob, name.split(/[\\/]/).pop() ?? 'project.dtf')
@@ -342,7 +392,8 @@ function createWebApi(): DtfApi {
         { description: 'DTF 프로젝트', accept: { 'application/json': ['.dtf'] } }
       ])
       if (!file) return null
-      return { data: validateProjectData(JSON.parse(await file.text())), filePath: file.name }
+      const data = await restoreEmbeddedAssets(validateProjectData(JSON.parse(await file.text())))
+      return { data, filePath: file.name }
     },
 
     exportColorMode: 'RGB',
