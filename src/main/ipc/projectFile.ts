@@ -4,8 +4,10 @@
  * 로드 시 원본 filePath에서 재생성한다(projectIO.ts).
  * pathOverride는 E2E 자동검증용 선택 인자(DTF_SMOKE_TEST 패턴) — 지정 시 다이얼로그 없이 직접 입출력.
  */
-import { BrowserWindow, dialog, ipcMain } from 'electron'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { BrowserWindow, app, dialog, ipcMain } from 'electron'
+import { createHash } from 'node:crypto'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { PROJECT_EXTENSION, validateProjectData, type ProjectData } from '../../core/project'
 import { readLastDir, saveDefaultPath, saveLastDir } from './dialogMemory'
 
@@ -51,6 +53,40 @@ export interface OpenedProject {
   filePath: string
 }
 
+/** 웹 빌드가 저장한 내장 에셋(.dtf assets)을 디스크 파일로 구체화해 경로 재매핑 —
+ *  userData/embedded-assets/<소스 해시>에 기록(같은 파일 재오픈 시 덮어쓰기)하므로
+ *  프리뷰 재생성·사이드카 내보내기 등 기존 파일 경로 파이프라인이 무수정 동작한다. */
+function materializeEmbeddedAssets(data: ProjectData, source: string): ProjectData {
+  if (!data.assets || data.assets.length === 0) return data
+  const dir = join(
+    app.getPath('userData'),
+    'embedded-assets',
+    createHash('md5').update(source).digest('hex')
+  )
+  mkdirSync(dir, { recursive: true })
+  const remap = new Map<string, string>()
+  data.assets.forEach((asset, index) => {
+    const safeName =
+      asset.name
+        .split('')
+        .filter((ch) => ch.charCodeAt(0) >= 0x20)
+        .join('')
+        .replace(/[\\/:*?"<>|]/g, '_') || `asset-${index}`
+    const target = join(dir, `${index}-${safeName}`)
+    writeFileSync(target, Buffer.from(asset.dataBase64, 'base64'))
+    remap.set(asset.path, target)
+  })
+  const materialized: ProjectData = {
+    ...data,
+    images: data.images.map((image) => {
+      const target = remap.get(image.filePath)
+      return target ? { ...image, filePath: target } : image
+    })
+  }
+  delete materialized.assets
+  return materialized
+}
+
 export function registerProjectIpc(): void {
   ipcMain.handle(
     'project:save',
@@ -82,7 +118,7 @@ export function registerProjectIpc(): void {
       } catch {
         throw new Error('프로젝트 파일을 해석할 수 없습니다 — 손상되었거나 DTF 프로젝트가 아닙니다')
       }
-      return { data: validateProjectData(raw), filePath: source }
+      return { data: materializeEmbeddedAssets(validateProjectData(raw), source), filePath: source }
     }
   )
 }
