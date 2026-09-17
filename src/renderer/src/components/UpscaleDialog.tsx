@@ -648,35 +648,41 @@ export function UpscaleDialog({
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-zinc-500" title="이미지 성격에 맞는 AI 엔진">
-                  엔진
-                </span>
-                {(
-                  [
-                    { v: 'general', l: '일반 사진', tip: '사진·그래픽 범용 (RealESRGAN x4)' },
-                    {
-                      v: 'anime',
-                      l: '일러스트·애니',
-                      tip: '라인아트·애니메이션 계열 (AnimeVideo-v3 x4)'
-                    }
-                  ] as const
-                ).map((item) => (
-                  <button
-                    key={item.v}
-                    type="button"
-                    title={item.tip}
-                    onClick={() => setEngine(item.v)}
-                    className={`flex-1 rounded-md border py-1.5 text-[11px] transition-colors active:scale-95 ${
-                      engine === item.v
-                        ? 'border-indigo-500 bg-indigo-500/15 text-indigo-300'
-                        : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:bg-zinc-800'
-                    }`}
-                  >
-                    {item.l}
-                  </button>
-                ))}
-              </div>
+              {window.api.aiUpscale === false ? (
+                <p className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-[10px] leading-relaxed text-zinc-500">
+                  웹 버전은 AI 엔진 대신 고품질 단계별 리샘플링으로 확대합니다.
+                </p>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500" title="이미지 성격에 맞는 AI 엔진">
+                    엔진
+                  </span>
+                  {(
+                    [
+                      { v: 'general', l: '일반 사진', tip: '사진·그래픽 범용 (RealESRGAN x4)' },
+                      {
+                        v: 'anime',
+                        l: '일러스트·애니',
+                        tip: '라인아트·애니메이션 계열 (AnimeVideo-v3 x4)'
+                      }
+                    ] as const
+                  ).map((item) => (
+                    <button
+                      key={item.v}
+                      type="button"
+                      title={item.tip}
+                      onClick={() => setEngine(item.v)}
+                      className={`flex-1 rounded-md border py-1.5 text-[11px] transition-colors active:scale-95 ${
+                        engine === item.v
+                          ? 'border-indigo-500 bg-indigo-500/15 text-indigo-300'
+                          : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:bg-zinc-800'
+                      }`}
+                    >
+                      {item.l}
+                    </button>
+                  ))}
+                </div>
+              )}
             </section>
 
             {/* ④ 예상 정보 */}

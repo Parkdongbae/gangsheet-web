@@ -143,7 +143,9 @@ export function ExportDialog({
                     <Layers size={14} strokeWidth={1.5} />
                     PSD
                   </span>
-                  <span className="text-[10px] text-zinc-500">CMYK · 350 DPI</span>
+                  <span className="text-[10px] text-zinc-500">
+                    {window.api.exportColorMode ?? 'CMYK'} · 350 DPI
+                  </span>
                 </div>
               </label>
               <label className="cursor-pointer">
