@@ -5,6 +5,7 @@ import {
   PROJECT_VERSION,
   validateProjectData,
   ProjectFormatError,
+  type ProjectAsset,
   type ProjectData
 } from './project'
 
@@ -137,7 +138,7 @@ describe('validateProjectData — 그룹(groupId) 저장', () => {
 })
 
 describe('validateProjectData — 내장 에셋(웹 저장)', () => {
-  const withAssets = (): ProjectData => ({
+  const withAssets = (): ProjectData & { assets: ProjectAsset[] } => ({
     ...validProject(),
     images: [
       { ...validProject().images[0], filePath: 'dtf-vfs://u1/logo.png' },
