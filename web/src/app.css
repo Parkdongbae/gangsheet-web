@@ -1,0 +1,7 @@
+/*
+ * 웹 빌드 CSS 엔트리 — 데스크톱 렌더러 스타일을 그대로 재사용한다.
+ * Tailwind 4 자동 소스 탐지가 vite root(web/) 밖의 재사용 소스를 놓칠 수
+ * 있으므로 @source로 렌더러 디렉터리를 명시 등록한다.
+ */
+@import '../../src/renderer/src/assets/main.css';
+@source '../../src/renderer/src';
