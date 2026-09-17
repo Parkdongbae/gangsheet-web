@@ -481,6 +481,15 @@ export function ProxyCanvas({
     setSelectedIds([])
   }, [loadNonce, initialImages])
 
+  // 씬 변경 통보 — Electron에서는 수신자가 없어 무효(inert). 웹 빌드의 자동저장·E2E 검증이 소비한다.
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('dtf:scene-committed', {
+        detail: { widthPx, heightPx, images }
+      })
+    )
+  }, [images, widthPx, heightPx])
+
   /** 뷰포트(패널 제외 캔버스 영역) 크기 추적 — 조작 이력 없으면 문서를 다시 맞춤 */
   useEffect(() => {
     const el = viewportRef.current
