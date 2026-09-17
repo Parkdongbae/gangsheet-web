@@ -226,4 +226,8 @@ export interface DtfApi {
   saveProject(data: ProjectData, path?: string): Promise<string | null>
   /** .dtf 프로젝트 열기 — 데이터 + 파일 경로 반환, 취소 시 null */
   openProject(path?: string): Promise<OpenedProject | null>
+  /** 내보내기 PSD 색상 모드 — 미정의 시 데스크톱 기본(CMYK). 웹 구현은 RGB로 명시 */
+  readonly exportColorMode?: 'CMYK' | 'RGB'
+  /** AI 업스케일 엔진 사용 여부 — 미정의 시 데스크톱 기본(true). 웹 구현은 리샘플만(false) */
+  readonly aiUpscale?: boolean
 }
