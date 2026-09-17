@@ -45,12 +45,16 @@ export type SaveTarget =
  * 저장 위치 선택. 픽커 사용 가능하면 네이티브 픽커(취소 시 null),
  * 아니면 다운로드 폴백(항상 진행 — cancel 개념 없음)으로 분기한다.
  */
+// E2E·CI: 픽커 없이 다운로드/숨김 input으로 확정하는 강제 플래그
+function e2eDownloadForced(): boolean {
+  return new URLSearchParams(window.location.search).has('dtf-e2e-download')
+}
+
 export async function pickSaveFile(
   suggestedName: string,
   types: SaveFileOptions['types']
 ): Promise<SaveTarget | null> {
-  // E2E·CI: 픽커 없이 다운로드로 확정하는 강제 플래그
-  if (new URLSearchParams(window.location.search).has('dtf-e2e-download')) {
+  if (e2eDownloadForced()) {
     return { mode: 'download', name: suggestedName }
   }
   const picker = pickerWindow().showSaveFilePicker
@@ -91,6 +95,10 @@ export async function pickOpenFile(
   pickerId: string,
   types: Array<{ description?: string; accept: Record<string, string | string[]> }>
 ): Promise<File | null> {
+  if (e2eDownloadForced()) {
+    const files = await openViaHiddenInput(pickerId, acceptOf(types), false)
+    return files[0] ?? null
+  }
   const picker = pickerWindow().showOpenFilePicker
   if (typeof picker === 'function') {
     try {
@@ -111,6 +119,7 @@ export async function pickOpenFiles(
   pickerId: string,
   types: Array<{ description?: string; accept: Record<string, string | string[]> }>
 ): Promise<File[] | null> {
+  if (e2eDownloadForced()) return openViaHiddenInput(pickerId, acceptOf(types), true)
   const picker = pickerWindow().showOpenFilePicker
   if (typeof picker === 'function') {
     try {
