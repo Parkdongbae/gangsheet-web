@@ -25,6 +25,17 @@ export interface ProjectImage {
   locked?: boolean
 }
 
+/** 웹 빌드가 저장하는 내장 원본 — 브라우저는 디스크 경로가 없어 파일에 싣는다.
+ *  데스크톱 저장은 기존대로 링크 기반(생략) — 로드 측만 양쪽 모두 지원한다. */
+export interface ProjectAsset {
+  /** 이 에셋을 참조하는 ProjectImage.filePath와 동일한 키 */
+  path: string
+  name: string
+  type: string
+  /** 원본 바이너리의 Base64 */
+  dataBase64: string
+}
+
 export interface ProjectDocument {
   widthPx: number
   heightPx: number
@@ -35,6 +46,8 @@ export interface ProjectData {
   version: number
   document: ProjectDocument
   images: ProjectImage[]
+  /** 내장 원본 — 웹 빌드 저장 시에만 존재 (v1 선택 필드, 구형 리더는 제거하고 연다) */
+  assets?: ProjectAsset[]
 }
 
 export class ProjectFormatError extends Error {
@@ -136,10 +149,49 @@ export function validateProjectData(raw: unknown): ProjectData {
       locked: item.locked === true ? true : undefined
     }
   })
+  const assets = validateProjectAssets(root.assets)
   return {
     format: PROJECT_FORMAT,
     version: PROJECT_VERSION,
     document: { widthPx, heightPx },
-    images
+    images,
+    ...(assets !== undefined ? { assets } : {})
   }
+}
+
+/** 선택적 내장 에셋 검증 — 같은 path 중복은 첫 항목으로 정규화, 빈 배열은 undefined */
+function validateProjectAssets(raw: unknown): ProjectAsset[] | undefined {
+  if (raw === undefined) return undefined
+  if (!Array.isArray(raw)) {
+    throw new ProjectFormatError('assets must be an array')
+  }
+  if (raw.length === 0) return undefined
+  const byPath = new Map<string, ProjectAsset>()
+  raw.forEach((entry, index) => {
+    const label = `assets[${index}]`
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      throw new ProjectFormatError(`${label} must be an object`)
+    }
+    const item = entry as Record<string, unknown>
+    if (typeof item.path !== 'string' || item.path.length === 0) {
+      throw new ProjectFormatError(`${label}.path must be a non-empty string`)
+    }
+    if (typeof item.name !== 'string' || item.name.length === 0) {
+      throw new ProjectFormatError(`${label}.name must be a non-empty string`)
+    }
+    if (typeof item.type !== 'string' || item.type.length === 0) {
+      throw new ProjectFormatError(`${label}.type must be a non-empty string`)
+    }
+    if (typeof item.dataBase64 !== 'string' || item.dataBase64.length === 0) {
+      throw new ProjectFormatError(`${label}.dataBase64 must be a non-empty string`)
+    }
+    const asset: ProjectAsset = {
+      path: item.path,
+      name: item.name,
+      type: item.type,
+      dataBase64: item.dataBase64
+    }
+    if (!byPath.has(asset.path)) byPath.set(asset.path, asset)
+  })
+  return [...byPath.values()]
 }

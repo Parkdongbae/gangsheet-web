@@ -136,6 +136,55 @@ describe('validateProjectData — 그룹(groupId) 저장', () => {
   })
 })
 
+describe('validateProjectData — 내장 에셋(웹 저장)', () => {
+  const withAssets = (): ProjectData => ({
+    ...validProject(),
+    images: [
+      { ...validProject().images[0], filePath: 'dtf-vfs://u1/logo.png' },
+      { ...validProject().images[0], id: 'a2', filePath: 'dtf-vfs://u1/logo.png' }
+    ],
+    assets: [
+      { path: 'dtf-vfs://u1/logo.png', name: 'logo.png', type: 'image/png', dataBase64: 'aGVsbG8=' }
+    ]
+  })
+
+  it('유효 에셋 보존 — 같은 path를 참조하는 이미지 2개도 1본만 내장', () => {
+    const result = validateProjectData(withAssets())
+    expect(result.assets).toHaveLength(1)
+    expect(result.assets![0]).toEqual({
+      path: 'dtf-vfs://u1/logo.png',
+      name: 'logo.png',
+      type: 'image/png',
+      dataBase64: 'aGVsbG8='
+    })
+  })
+
+  it('같은 path 중복 에셋은 첫 항목으로 정규화', () => {
+    const raw = withAssets()
+    raw.assets.push({ ...raw.assets[0], dataBase64: 'eHl6' })
+    const result = validateProjectData(raw)
+    expect(result.assets).toHaveLength(1)
+    expect(result.assets![0].dataBase64).toBe('aGVsbG8=')
+  })
+
+  it('빈 배열·미지정은 assets 필드 없음 (데스크톱 저장 형태와 동일)', () => {
+    expect(validateProjectData({ ...withAssets(), assets: [] }).assets).toBeUndefined()
+    expect(validateProjectData(validProject()).assets).toBeUndefined()
+  })
+
+  it.each([
+    ['배열 아님', { ...withAssets(), assets: 'x' }],
+    ['항목이 객체 아님', { ...withAssets(), assets: ['x'] }],
+    ['path 누락', { ...withAssets(), assets: [{ name: 'a', type: 't', dataBase64: 'QQ==' }] }],
+    [
+      '빈 dataBase64',
+      { ...withAssets(), assets: [{ path: 'p', name: 'a', type: 't', dataBase64: '' }] }
+    ]
+  ])('%s → throw', (_name, raw) => {
+    expect(() => validateProjectData(raw)).toThrow(ProjectFormatError)
+  })
+})
+
 describe('프로젝트 상수', () => {
   it('확장자 .dtf · 포맷·버전 식별자', () => {
     expect(PROJECT_EXTENSION).toBe('dtf')
