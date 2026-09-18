@@ -144,7 +144,9 @@ export function encodeFlattenedPsd(opts: {
   const countsView = new DataView(countsBytes.buffer)
   for (let i = 0; i < channelCounts.length; i++) countsView.setUint16(i * 2, channelCounts[i]!)
 
-  // ---- 패스 2: 행별 재인코딩 → 스트립 단위 청크 적립 ----
+  // ---- 패스 2: 채널 평면 순서(R 전체 → G 전체 → B 전체)로 재인코딩 ----
+  // PSD 규격은 채널별 "전체 이미지" 연속 저장이다 — 스트립별 R/G/B 반복은 포토샵이
+  // 채널을 엇갈려 읽어 줄무늬 글리치가 된다. 채널당 1패스씩 스트립을 순회한다.
   const parts: BlobPart[] = [
     header,
     colorModeLen,
@@ -153,18 +155,20 @@ export function encodeFlattenedPsd(opts: {
     compression,
     countsBytes
   ]
-  const stripBuffer = new Uint8Array(scratchSize(width) * STRIP_ROWS * 3)
-  for (let y0 = 0; y0 < height; y0 += STRIP_ROWS) {
-    const rows = Math.min(STRIP_ROWS, height - y0)
-    const strip = read(y0, rows)
-    let at = 0
-    for (let c = 0; c < 3; c++) {
+  const chunkBuffer = new Uint8Array(scratchSize(width) * STRIP_ROWS)
+  for (let c = 0; c < 3; c++) {
+    for (let y0 = 0; y0 < height; y0 += STRIP_ROWS) {
+      const rows = Math.min(STRIP_ROWS, height - y0)
+      const strip = read(y0, rows)
+      let at = 0
       for (let y = 0; y < rows; y++) {
         extractRow(strip, y, c)
-        at += packBitsInto(rowBytes, width, scratch, stripBuffer, at)
+        at += packBitsInto(rowBytes, width, scratch, chunkBuffer, at)
       }
+      // slice로 복사 — subarray 뷰를 push하면 다음 스트립이 버퍼를 덮어써
+      // Blob 생성 시점에 스트립 내용이 유실된다
+      parts.push(chunkBuffer.slice(0, at))
     }
-    parts.push(stripBuffer.subarray(0, at))
   }
 
   return new Blob(parts, { type: 'image/vnd.adobe.photoshop' })

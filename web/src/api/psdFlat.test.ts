@@ -155,6 +155,52 @@ describe('encodeFlattenedPsd', () => {
     ).toThrow()
   })
 
+  it('STRIP_ROWS 경계 넘는 문서의 스트립 내용이 섞이지 않는다 (회귀: 포토샵 글리치)', async () => {
+    const W = 33
+    const H = 700 // STRIP_ROWS(256) 초과 — 3개 스트립
+    // 행마다 다른 밝기 → 스트립이 뒤섞이면 즉시 탐지
+    const img = imageData(W, H, (_x, y) => [y % 256, (y * 2) % 256, (y * 3) % 256, 255])
+    const blob = encodeFlattenedPsd({
+      width: W,
+      height: H,
+      dpi: 350,
+      read: (y, h) => imgDataSlice(img, y, h)
+    })
+    const psd = new Uint8Array(await blob.arrayBuffer())
+    const view = new DataView(psd.buffer, psd.byteOffset, psd.byteLength)
+
+    const colorModeLen = view.getUint32(26)
+    const resourcesStart = 30 + colorModeLen
+    const layerMaskStart = resourcesStart + 4 + view.getUint32(resourcesStart)
+    const countsStart = layerMaskStart + 6 // u32 섹션길이 + u16 압축방식
+    // 채널 0(R) 행별 데이터 오프셋 — 카운트 테이블 누적
+    const rowOffset: number[] = []
+    let readAt = countsStart + 6 * H
+    for (let row = 0; row < H; row++) {
+      rowOffset.push(readAt)
+      readAt += view.getUint16(countsStart + row * 2)
+    }
+    for (const y of [5, 250, 258, 513, 690]) {
+      const packedLen = view.getUint16(countsStart + y * 2)
+      const row = decodePackBits(psd.subarray(rowOffset[y], rowOffset[y]! + packedLen))
+      expect(row.length).toBe(W)
+      expect(row[0]).toBe(y % 256)
+      expect(row[1]).toBe(y % 256)
+      expect(row[2]).toBe(y % 256)
+    }
+    // 채널 평면 순서 검증 — G(=2y mod 256)·B(=3y mod 256) 채널의 같은 행
+    let gReadAt = countsStart + 6 * H
+    for (let row = 0; row < H; row++) gReadAt += view.getUint16(countsStart + row * 2)
+    for (let row = 0; row < 258; row++) gReadAt += view.getUint16(countsStart + (H + row) * 2)
+    const gRow = decodePackBits(psd.subarray(gReadAt, gReadAt + 2))
+    expect(gRow[0]).toBe((258 * 2) % 256)
+    let bReadAt = gReadAt
+    for (let row = 258; row < H; row++) bReadAt += view.getUint16(countsStart + (H + row) * 2)
+    for (let row = 0; row < 690; row++) bReadAt += view.getUint16(countsStart + (2 * H + row) * 2)
+    const bRow = decodePackBits(psd.subarray(bReadAt, bReadAt + 2))
+    expect(bRow[0]).toBe((690 * 3) % 256)
+  })
+
   it('비압축성 이미지가 스트립 버퍼를 넘지 않는다 (회귀: Offset is out of bounds)', () => {
     const W = 64
     const H = 130
