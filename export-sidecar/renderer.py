@@ -23,6 +23,7 @@ IPC 절약 철칙 (STDIO_GUIDE): stdio로 이미지 바이너리·Base64를 절�
   단일 인쇄 레이어 저장 (F8 병합 옵션 — 합성은 RGB에서, 변환은 최종 1회)
 - ``format="png"``: 합성 결과를 RGB+알파 그대로 저장 (F9 검수용 — 알파 =
   백색 잉크 영역, DPI는 pHYs 청크로 기록)
+- ``format="pdf"``: 흰 종이 합성 RGB를 1페이지 PDF로 저장 (인쇄 검수용)
 
 진행 보고: ``on_progress(stage, current, total)`` 콜백을 받아 항목 렌더
 직후마다 ``("items", i+1, total)``, 저장 직전에 ``("write", total, total)``을
@@ -56,6 +57,7 @@ DPI_MAX: Final[int] = 4800
 LAYER_NAME_STEM_MAX: Final[int] = 180
 FORMAT_PSD: Final[str] = "psd"
 FORMAT_PNG: Final[str] = "png"
+FORMAT_PDF: Final[str] = "pdf"
 STAGE_ITEMS: Final[str] = "items"
 STAGE_WRITE: Final[str] = "write"
 MERGED_LAYER_NAME: Final[str] = "Merged 1"
@@ -124,8 +126,8 @@ def parse_manifest(data: Mapping[str, object]) -> Manifest:
         raise ManifestError("output_path must be a non-empty string")
 
     fmt_raw = data.get("format", FORMAT_PSD)
-    if not isinstance(fmt_raw, str) or fmt_raw not in (FORMAT_PSD, FORMAT_PNG):
-        raise ManifestError(f"format must be 'psd' or 'png', got {fmt_raw!r}")
+    if not isinstance(fmt_raw, str) or fmt_raw not in (FORMAT_PSD, FORMAT_PNG, FORMAT_PDF):
+        raise ManifestError(f"format must be 'psd', 'png' or 'pdf', got {fmt_raw!r}")
     flatten_raw = data.get("flatten", False)
     if not isinstance(flatten_raw, bool):
         raise ManifestError(f"flatten must be a boolean, got {flatten_raw!r}")
@@ -201,6 +203,17 @@ def render_manifest(
         report(STAGE_WRITE, total)
         canvas = _compose_rgba(prepared, width_px, height_px)
         canvas.save(manifest.output_path, format=FORMAT_PNG, dpi=(dpi, dpi))
+        layer_count = 1
+    elif manifest.fmt == FORMAT_PDF:
+        report(STAGE_WRITE, total)
+        canvas = _compose_rgba(prepared, width_px, height_px)
+        # 검수용 PDF — 투명 픽셀은 흰 종이에 합성(알파 폐기), JPEG 인코딩
+        background = Image.new("RGB", canvas.size, (255, 255, 255))
+        background.paste(canvas, mask=canvas.getchannel("A"))
+        del canvas
+        background.save(
+            manifest.output_path, format="PDF", resolution=float(dpi), quality=92
+        )
         layer_count = 1
     else:
         report(STAGE_WRITE, total)

@@ -416,10 +416,10 @@ class SidecarManager {
   }
 }
 
-function saveDialogFilters(format: 'psd' | 'png'): Electron.FileFilter[] {
-  return format === 'psd'
-    ? [{ name: 'Photoshop 문서 (CMYK·350DPI)', extensions: ['psd'] }]
-    : [{ name: 'PNG 이미지 (알파 보존)', extensions: ['png'] }]
+function saveDialogFilters(format: 'psd' | 'png' | 'pdf'): Electron.FileFilter[] {
+  if (format === 'psd') return [{ name: 'Photoshop 문서 (CMYK·350DPI)', extensions: ['psd'] }]
+  if (format === 'pdf') return [{ name: 'PDF 문서 (인쇄 검수용)', extensions: ['pdf'] }]
+  return [{ name: 'PNG 이미지 (알파 보존)', extensions: ['png'] }]
 }
 
 const sidecar = new SidecarManager()
@@ -461,12 +461,12 @@ export function warmupRemoveBgSidecar(): Promise<void> {
 
 export function registerExportIpc(): void {
   ipcMain.handle('export:save-dialog', async (event, format: unknown): Promise<string | null> => {
-    if (format !== 'psd' && format !== 'png') {
-      throw new Error('내보내기 포맷은 "psd" 또는 "png"여야 합니다')
+    if (format !== 'psd' && format !== 'png' && format !== 'pdf') {
+      throw new Error('내보내기 포맷은 "psd", "png" 또는 "pdf"여야 합니다')
     }
     const owner = BrowserWindow.fromWebContents(event.sender)
     const options: Electron.SaveDialogOptions = {
-      title: format === 'psd' ? 'PSD 내보내기' : 'PNG 내보내기',
+      title: `${format.toUpperCase()} 내보내기`,
       defaultPath: saveDefaultPath('export', `gangsheet.${format}`),
       filters: saveDialogFilters(format)
     }
