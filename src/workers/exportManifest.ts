@@ -10,8 +10,8 @@
  */
 
 /** 사이드카로 전달되는 매니페스트 항목 — src 외에는 전부 실물 단위(cm) */
-/** psd = CMYK 레이어 보존(기본) · png = 알파 보존 검수용(F9) */
-export type ExportFormat = 'psd' | 'png'
+/** psd = CMYK 레이어 보존(기본) · png = 알파 보존 검수용(F9) · pdf = 인쇄 검수 문서 */
+export type ExportFormat = 'psd' | 'png' | 'pdf'
 
 export interface ExportManifestItem {
   src: string
@@ -90,7 +90,7 @@ export function buildExportManifest(params: ExportManifestParams): ExportManifes
     }))
   }
   // 기본값(psd·false)은 생략 — 직렬화 최소화(바이너리 유출 방지 2KB 상한 회귀 대상)
-  if (params.format === 'png') manifest.format = 'png'
+  if (params.format === 'png' || params.format === 'pdf') manifest.format = params.format
   if (params.flatten) manifest.flatten = true
   return manifest
 }

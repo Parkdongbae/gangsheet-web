@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   CheckCircle2,
   FileOutput,
+  FileText,
   Image as ImageIcon,
   Layers,
   Loader2,
@@ -119,7 +120,7 @@ export function ExportDialog({
 
         {phase === 'setup' && (
           <>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <label className="cursor-pointer">
                 <input
                   type="radio"
@@ -172,6 +173,32 @@ export function ExportDialog({
                     PNG
                   </span>
                   <span className="text-[10px] text-zinc-500">알파 검수용</span>
+                </div>
+              </label>
+              <label className="cursor-pointer">
+                <input
+                  type="radio"
+                  name="export-format"
+                  checked={format === 'pdf'}
+                  onChange={() => setFormat('pdf')}
+                  className="sr-only"
+                />
+                <div
+                  className={`flex flex-col gap-0.5 rounded-md border p-2.5 transition-colors ${
+                    format === 'pdf'
+                      ? 'border-indigo-500 bg-indigo-500/15'
+                      : 'border-zinc-800 bg-zinc-950 hover:bg-zinc-800'
+                  }`}
+                >
+                  <span
+                    className={`flex items-center gap-1.5 text-sm font-semibold ${
+                      format === 'pdf' ? 'text-indigo-300' : 'text-zinc-200'
+                    }`}
+                  >
+                    <FileText size={14} strokeWidth={1.5} />
+                    PDF
+                  </span>
+                  <span className="text-[10px] text-zinc-500">인쇄 검수용</span>
                 </div>
               </label>
             </div>

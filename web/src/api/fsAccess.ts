@@ -162,9 +162,11 @@ function openViaHiddenInput(pickerId: string, accept: string, multiple: boolean)
 export const IMAGE_EXTENSIONS = '.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,.psd'
 
 export function acceptExtensionsFor(
-  format: 'psd' | 'png'
+  format: 'psd' | 'png' | 'pdf'
 ): Array<{ description: string; accept: Record<string, string[]> }> {
   if (format === 'psd')
     return [{ description: 'Photoshop PSD', accept: { 'image/vnd.adobe.photoshop': ['.psd'] } }]
+  if (format === 'pdf')
+    return [{ description: 'PDF 문서', accept: { 'application/pdf': ['.pdf'] } }]
   return [{ description: 'PNG 이미지', accept: { 'image/png': ['.png'] } }]
 }

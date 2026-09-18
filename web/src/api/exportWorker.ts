@@ -15,6 +15,7 @@ import { cmToPx, type ExportManifest } from '@workers/exportManifest'
 import { rotatedBBox } from '@renderer/components/canvas/alignment'
 import { encodeFlattenedPsd, patchPsdResolution } from './psdFlat'
 import { injectPngDpi } from './pngMeta'
+import { encodePdf } from './pdfFlat'
 
 interface ExportRequest {
   type: 'export'
@@ -87,6 +88,29 @@ function renderScene(
 async function encodePng(canvas: OffscreenCanvas, dpi: number): Promise<Blob> {
   const raw = await canvas.convertToBlob({ type: 'image/png' })
   return new Blob([injectPngDpi(await raw.arrayBuffer(), dpi)], { type: 'image/png' })
+}
+
+/** 검수용 PDF — 투명 픽셀을 흰 배경으로 합성 후 JPEG(DCT)로 페이지에 임베드 */
+async function encodeScenePdf(
+  scene: {
+    canvas: OffscreenCanvas
+    ctx: OffscreenCanvasRenderingContext2D
+    widthPx: number
+    heightPx: number
+  },
+  dpi: number
+): Promise<Blob> {
+  scene.ctx.globalCompositeOperation = 'destination-over'
+  scene.ctx.fillStyle = '#ffffff'
+  scene.ctx.fillRect(0, 0, scene.widthPx, scene.heightPx)
+  scene.ctx.globalCompositeOperation = 'source-over'
+  const jpeg = await scene.canvas.convertToBlob({ type: 'image/jpeg', quality: 0.92 })
+  return encodePdf({
+    widthPx: scene.widthPx,
+    heightPx: scene.heightPx,
+    dpi,
+    jpeg: new Uint8Array(await jpeg.arrayBuffer())
+  })
 }
 
 function itemLayerImageData(
@@ -167,6 +191,8 @@ async function handleExport(request: ExportRequest): Promise<void> {
     let layerCount = 1
     if (format === 'png') {
       blob = await encodePng(scene.canvas, dpi)
+    } else if (format === 'pdf') {
+      blob = await encodeScenePdf(scene, dpi)
     } else if (request.manifest.flatten !== false) {
       blob = encodeFlattenedPsd({
         width: scene.widthPx,
