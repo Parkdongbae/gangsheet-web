@@ -187,7 +187,32 @@ async function main() {
       `PNG 치수 5cm×1m @350DPI (${meta.width}×${meta.height})`
     )
     assert(meta.dpi === 350, `PNG pHYs 350 DPI (${meta.dpi})`)
-    await page.keyboard.press('Escape')
+    // 완료 페이즈의 닫기 버튼으로 확실히 닫는다 (Escape는 렌더 중 무시될 수 있음)
+    await page
+      .getByRole('dialog', { name: '내보내기' })
+      .getByRole('button', { name: '닫기', exact: true })
+      .click()
+
+    // --- PDF 내보내기 (물리 크기 페이지·JPEG 임베드 검증) ---
+    await page.locator('button[title="내보내기 (PSD·PNG)"]').click()
+    await page.getByRole('dialog', { name: '내보내기' }).getByText('PDF', { exact: true }).click()
+    const pdfDownloadPromise = page.waitForEvent('download', { timeout: 60000 })
+    await page
+      .getByRole('dialog', { name: '내보내기' })
+      .getByRole('button', { name: '내보내기', exact: true })
+      .click()
+    const pdfDownload = await pdfDownloadPromise
+    const pdfText = readFileSync(await pdfDownload.path()).subarray(0, 2048).toString('latin1')
+    assert(pdfText.startsWith('%PDF-'), 'PDF 시그니처')
+    assert(
+      pdfText.includes('/MediaBox [0 0 141.737 2834.743'),
+      `PDF 물리 페이지 5cm×1m (${pdfText.match(/\/MediaBox \[[^\]]+\]/)?.[0] ?? '?'})`
+    )
+    assert(pdfText.includes('/Filter /DCTDecode'), 'PDF JPEG(DCT) 임베드')
+    await page
+      .getByRole('dialog', { name: '내보내기' })
+      .getByRole('button', { name: '닫기', exact: true })
+      .click()
 
     // --- .dtf 저장 (dtf:save-project → 다운로드) ---
     const saveDownloadPromise = page.waitForEvent('download', { timeout: 30000 })
