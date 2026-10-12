@@ -30,6 +30,7 @@
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@tailwindcss/vite": "^4.3.3",
+    "@vercel/analytics": "^2.0.1",
     "ag-psd": "^31.0.2",
     "konva": "^10.3.2",
     "lucide-react": "^1.39.0",
