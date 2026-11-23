@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { Link2, Link2Off, Loader2, TriangleAlert, X, ZoomIn } from 'lucide-react'
 import {
   PlanInputError,
@@ -150,6 +150,9 @@ export function UpscaleDialog({
   const [error, setError] = useState<string | null>(null)
   const [engine, setEngine] = useState<UpscaleEngine>('general')
   const [msPerMpx, setMsPerMpx] = useState<number | null>(null)
+  /** 진행 중 남은 시간(초) — 계산 전·불가 구간은 null */
+  const [etaSeconds, setEtaSeconds] = useState<number | null>(null)
+  const runStartRef = useRef(0)
   const [resumableRun, setResumableRun] = useState<UpscaleResumeInfo | null>(null)
 
   useEffect(() => {
@@ -231,7 +234,16 @@ export function UpscaleDialog({
 
   useEffect(() => {
     if (!running) return
-    return window.api.onUpscaleProgress((p) => setProgress(p))
+    return window.api.onUpscaleProgress((p) => {
+      setProgress(p)
+      // 남은 시간 — 지금까지의 속도로 단순 외삽(초반 5%는 준비 구간이라 보류)
+      const elapsed = performance.now() - runStartRef.current
+      setEtaSeconds(
+        p.overallProgress > 0.05 && p.overallProgress < 1 && elapsed > 1500
+          ? Math.max(1, Math.round((elapsed * (1 - p.overallProgress)) / p.overallProgress / 1000))
+          : null
+      )
+    })
   }, [running])
 
   const srcAspect = info ? info.width / info.height : 1
@@ -322,6 +334,8 @@ export function UpscaleDialog({
   const start = (): void => {
     if (!options || running) return
     setRunning(true)
+    runStartRef.current = performance.now()
+    setEtaSeconds(null)
     setRunningMode('fresh')
     setProgress(null)
     setError(null)
@@ -342,6 +356,8 @@ export function UpscaleDialog({
   const resume = (): void => {
     if (running) return
     setRunning(true)
+    runStartRef.current = performance.now()
+    setEtaSeconds(null)
     setRunningMode('resume')
     setProgress(null)
     setError(null)
@@ -444,6 +460,11 @@ export function UpscaleDialog({
               {Math.round((progress?.overallProgress ?? 0) * 100)}% ·{' '}
               {stepMessage ?? '엔진 준비 중…'}
               {progress?.stage === 'tile' ? ` (타일 ${progress.current}/${progress.total})` : ''}
+            </p>
+            <p className="text-center text-xs tabular-nums text-zinc-500">
+              {etaSeconds !== null
+                ? `약 ${etaSeconds >= 60 ? `${Math.floor(etaSeconds / 60)}분 ` : ''}${etaSeconds % 60}초 남음`
+                : '남은 시간 계산 중…'}
             </p>
             {plan && plan !== 'invalid' && runningMode === 'fresh' && (
               <p className="text-center text-[11px] text-zinc-500">
@@ -650,7 +671,7 @@ export function UpscaleDialog({
               </div>
               {window.api.aiUpscale === false ? (
                 <p className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-[11px] leading-relaxed text-zinc-500">
-                  웹 버전은 AI 엔진 대신 고품질 단계별 리샘플링으로 확대합니다.
+                  이 환경은 AI 엔진 대신 고품질 단계별 리샘플링으로 확대합니다.
                 </p>
               ) : (
                 <div className="flex items-center gap-1.5">

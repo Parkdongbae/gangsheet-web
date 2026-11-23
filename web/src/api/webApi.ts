@@ -28,6 +28,7 @@ import { validateProjectData, type ProjectAsset, type ProjectData } from '@core/
 import type { ExportManifest } from '@workers/exportManifest'
 import * as fsa from './fsAccess'
 import * as ops from './imageOps'
+import { cancelAiUpscale } from './upscale/upClient'
 import {
   getEntry,
   has,
@@ -44,6 +45,16 @@ import {
 const AUTOSAVE_KEY = 'autosave-project'
 const AUTOSAVE_PATH = 'web-autosave://last'
 const UPSCALE_CANCELLED = '업스케일이 취소되었습니다'
+const UPSCALE_CALIBRATION_KEY = 'dtf:up-calibration'
+
+function readUpscaleCalibration(): number | null {
+  try {
+    const value = Number(localStorage.getItem(UPSCALE_CALIBRATION_KEY))
+    return Number.isFinite(value) && value > 0 ? value : null
+  } catch {
+    return null
+  }
+}
 const EXPORT_CANCELLED = '내보내기가 취소되었습니다'
 
 let vfsReady: Promise<number> | null = null
@@ -292,6 +303,24 @@ function createWebApi(): DtfApi {
         if (cancelledUpscale) throw new Error(UPSCALE_CANCELLED)
         upscaleBus.emit(progress)
       })
+      const elapsed = run.steps.reduce((sum, step) => sum + step.ms, 0)
+      if (run.method === 'ai') {
+        // 예상 시간 표시용 — 결과 메가픽셀당 소요(ms), 직전 값과 섞어 완만하게 갱신
+        const perMpx = elapsed / Math.max(0.05, (run.width * run.height) / 1_000_000)
+        const prev = readUpscaleCalibration()
+        try {
+          localStorage.setItem(
+            UPSCALE_CALIBRATION_KEY,
+            String(Math.round(prev === null ? perMpx : prev * 0.4 + perMpx * 0.6))
+          )
+        } catch {
+          /* 저장 실패는 무시 */
+        }
+      } else if (run.method === 'ai-fallback') {
+        alert(
+          'AI 업스케일 엔진을 불러오지 못해 일반 확대로 처리했습니다.\n인터넷 연결을 확인한 뒤 다시 시도하면 더 선명한 결과를 얻을 수 있습니다.'
+        )
+      }
       const ext = options.format === 'jpeg' ? 'jpg' : options.format
       const newPath = registerBlob(`${stripExt(vfsFileName(filePath))}_up.${ext}`, run.blob)
       return {
@@ -300,7 +329,7 @@ function createWebApi(): DtfApi {
         filePath: newPath,
         totalScale: run.totalScale,
         steps: run.steps,
-        elapsedMs: run.steps.reduce((sum, step) => sum + step.ms, 0)
+        elapsedMs: elapsed
       }
     },
 
@@ -315,11 +344,12 @@ function createWebApi(): DtfApi {
     },
 
     async getUpscaleCalibration(): Promise<{ msPerMpx: number | null }> {
-      return { msPerMpx: null }
+      return { msPerMpx: readUpscaleCalibration() }
     },
 
     async cancelUpscale(): Promise<void> {
       cancelledUpscale = true
+      cancelAiUpscale()
     },
 
     onUpscaleProgress(listener: (progress: UpscaleProgress) => void): () => void {
@@ -425,7 +455,7 @@ function createWebApi(): DtfApi {
 
     exportColorMode: 'RGB',
     bgRemovalModes: ['ai', 'solid'],
-    aiUpscale: false
+    aiUpscale: true
   }
   return api
 }

@@ -5,6 +5,10 @@
   uv run --with --directory export-sidecar ... 대신 직접:
   cd export-sidecar && uv run python ../scripts/generate_third_party_licenses.py
 (또는 .venv의 python으로 직접 실행 — 표준 라이브러리만 사용)
+
+[4] 웹 버전 AI 구성요소 절만 고칠 때(사이드카 환경 불필요):
+  python scripts/generate_third_party_licenses.py --web-ai-only
+기존 파일의 [1]~[3]은 그대로 두고 [4]만 교체한 뒤 web/public 사본을 맞춘다.
 """
 import json
 import re
@@ -15,6 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "resources" / "THIRD_PARTY_LICENSES.txt"
+WEB_OUT = ROOT / "web" / "public" / "THIRD_PARTY_LICENSES.txt"
 SITE = ROOT / "export-sidecar" / ".venv" / "Lib" / "site-packages"
 
 HEADER = """DTF GangSheet Studio — Third-Party Open Source Licenses
@@ -28,6 +33,7 @@ Sections:
   [1] Node.js dependencies (renderer + main process)
   [2] Python sidecar dependencies (image processing / background removal)
   [3] Bundled AI model weights
+  [4] Web version: in-browser AI runtime and models (downloaded at first use)
 
 """
 
@@ -301,17 +307,108 @@ def collect_python() -> str:
     return "\n\n".join(entries)
 
 
+WEB_AI_MARK = "[4] Web version: in-browser AI runtime and models"
+
+WEB_AI_NOTE = WEB_AI_MARK + """
+-------------------------------------------------------
+The web (browser) build runs background removal and upscaling on the user's
+device. The runtime below is bundled with the web build; model weights are NOT
+bundled -- they are downloaded once from the listed source at first use and
+cached by the browser. Images never leave the device.
+
+Runtime (bundled)
+- onnxruntime-web 1.31.1 -- MIT License, Copyright (c) Microsoft Corporation
+  https://github.com/microsoft/onnxruntime
+  Bundled dependencies of onnxruntime-web:
+    onnxruntime-common 1.31.1 (MIT), flatbuffers 25.x (Apache-2.0),
+    protobufjs 7.x (BSD-3-Clause), long 5.x (Apache-2.0),
+    guid-typescript 1.0.9 (ISC), platform 1.3.6 (MIT)
+
+Model weights (downloaded at first use, revision pinned)
+- IS-Net general use (background removal)
+  Weights: https://huggingface.co/imgly/isnet-general-onnx  -- MIT License
+           revision 440dea96dd4a3b06bbbf5abec3e26569dd7ec49f
+           (onnx/model_fp16.onnx for WebGPU, onnx/model.onnx for WASM)
+  Research: Highly Accurate Dichotomous Image Segmentation (DIS),
+            Xuebin Qin et al. -- https://github.com/xuebinqin/DIS (Apache-2.0)
+
+- realesr-general-x4v3 (upscaling, "general" engine)
+  Weights: https://huggingface.co/TheGuy444/Real-ESRGAN-ONNX  -- BSD 3-Clause
+           revision 4c80f3da1a8a85f0757a9e7f79e08d0307220eb5
+  Original: https://github.com/xinntao/Real-ESRGAN -- BSD 3-Clause,
+            Copyright (c) 2021, Xintao Wang
+
+- RealESR-AnimeVideo-v3 x4 (upscaling, "anime" engine)
+  Weights: https://huggingface.co/tidus2102/Real-ESRGAN  -- BSD 3-Clause
+           revision c9a1cd990b587ccf20be2373fad8eb021e24ab01
+  Original: https://github.com/xinntao/Real-ESRGAN -- BSD 3-Clause,
+            Copyright (c) 2021, Xintao Wang
+
+The BSD 3-Clause and Apache 2.0 full texts are reproduced in section [3].
+
+--- MIT License (onnxruntime-web, onnxruntime-common, imgly/isnet-general-onnx) ---
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
+#: v0.5.0 초판에서 web/public 사본에만 손으로 붙였던 임시 절의 시작 문구(재생성 시 제거)
+_LEGACY_WEB_MARK = "웹 버전 추가 구성요소"
+_SECTIONS_LINE = "  [3] Bundled AI model weights\n"
+_SECTIONS_WEB_LINE = (
+    "  [4] Web version: in-browser AI runtime and models (downloaded at first use)\n"
+)
+
+
+def with_web_ai_section(text: str) -> str:
+    """기존 고지 본문에서 [4](및 임시 절)를 걷어내고 최신 [4]를 붙인다."""
+    text = text.replace("\r\n", "\n")
+    for mark in (WEB_AI_MARK + "\n---", _LEGACY_WEB_MARK):
+        idx = text.find(mark)
+        if idx != -1:
+            text = text[:idx]
+    # 임시 절 앞의 구분선(=== 줄)까지 정리
+    text = text.rstrip("\n").rstrip("=").rstrip("\n")
+    if _SECTIONS_WEB_LINE not in text and _SECTIONS_LINE in text:
+        text = text.replace(_SECTIONS_LINE, _SECTIONS_LINE + _SECTIONS_WEB_LINE, 1)
+    return text + "\n\n\n" + WEB_AI_NOTE
+
+
+def write_outputs(text: str) -> None:
+    """데스크톱 번들용 원본과 웹 공개 사본을 같은 내용으로 기록한다."""
+    for path in (OUT, WEB_OUT):
+        path.write_text(text, encoding="utf-8", newline="\n")
+        print(f"wrote {path} ({path.stat().st_size // 1024} KB)")
+
+
 def main() -> None:
+    if "--web-ai-only" in sys.argv:
+        write_outputs(with_web_ai_section(OUT.read_text(encoding="utf-8")))
+        return
     node = collect_node()
     py = collect_python()
-    OUT.write_text(
-        HEADER
-        + "[1] Node.js dependencies\n-------------------------\n\n" + node
-        + "\n\n\n[2] Python sidecar dependencies\n-------------------------------\n\n" + py
-        + "\n\n\n" + MODEL_NOTE,
-        encoding="utf-8",
+    write_outputs(
+        with_web_ai_section(
+            HEADER
+            + "[1] Node.js dependencies\n-------------------------\n\n" + node
+            + "\n\n\n[2] Python sidecar dependencies\n-------------------------------\n\n" + py
+            + "\n\n\n" + MODEL_NOTE
+        )
     )
-    print(f"wrote {OUT} ({OUT.stat().st_size // 1024} KB)")
 
 
 if __name__ == "__main__":

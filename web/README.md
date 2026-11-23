@@ -31,7 +31,10 @@ web/
     vfs.ts              가상 파일 시스템(메모리 + IndexedDB write-through)
     fsAccess.ts         저장/열기: FS Access API → 다운로드/input 폴백
     imageOps.ts         임포트 프리뷰·배경제거 진입점·오토트림·리샘플 업스케일
-    bgRemoval/          AI 배경 제거 — matting.ts(픽셀 연산)·bgWorker.ts(ISNet 추론 워커)·bgClient.ts
+    ai/ortRuntime.ts    onnxruntime-web 공통 설정·가중치 다운로드/캐시(워커 전용)
+    bgRemoval/          AI 배경 제거 — matting.ts(픽셀 연산)·bgWorker.ts(ISNet 추론 워커)·
+                        bgClient.ts·progress.ts(진행률·남은 시간 예측)
+    upscale/            AI 업스케일 — tiles.ts(타일 연산)·upWorker.ts(Real-ESRGAN 워커)·upClient.ts
     exportWorker.ts     풀해상도 렌더 워커 → PNG/PSD 인코딩
     psdFlat.ts          평면 RGB PSD 라이터(350 DPI ResolutionInfo, RLE)
     pngMeta.ts          PNG pHYs(350 DPI) 주입·파싱
@@ -52,7 +55,7 @@ Electron에서 수신자가 없는 inert 코드).
 | PNG 저장(Pillow dpi=350)            | Canvas 인코딩 + **pHYs 청크 350 DPI 주입**                      |
 | CMYK PSD 작성(psd-tools + lcms)     | **RGB 8bit PSD**(평면=자체 인코더, 레이어=ag-psd) + 350 DPI     |
 | 배경 제거(rembg AI)                 | **브라우저 내 AI(ISNet · onnxruntime-web, WebGPU→WASM 폴백)** + 단색 배경 모드 |
-| 업스케일(RealESRGAN/AnimeVideo AI)  | **단계별 고품질 리샘플**(공유 Plan Builder 체인)                |
+| 업스케일(RealESRGAN/AnimeVideo AI)  | **브라우저 내 AI(Real-ESRGAN 소형 모델, 타일 추론)** — 1.5배 이하는 고품질 리샘플 |
 | 번들 PDF 열기(shell.openPath)       | `web/public` PDF를 새 탭에서 열기                               |
 
 ## 데스크톱 대비 차이점 (알려진 제약)
@@ -60,11 +63,13 @@ Electron에서 수신자가 없는 inert 코드).
 1. **PSD 색상 모드**: 브라우저에서는 CMYK 변환(lcms)이 불가하므로 **RGB PSD**로
    저장됩니다. 전사업체가 CMYK를 요구하면 데스크톱 버전으로 내보내거나 PNG를
    사용하세요. (다이얼로그 표기도 `RGB · 350 DPI`로 표시됩니다)
-2. **배경 제거는 AI, 업스케일은 리샘플**: 배경 제거는 ISNet general-use 모델을 브라우저에서
+2. **배경 제거·업스케일 모두 브라우저 내 AI**: 배경 제거는 ISNet general-use 모델을 브라우저에서
    직접 실행합니다(이미지는 서버로 전송되지 않음). 첫 사용 시 모델 가중치(WebGPU 약 84MB /
    WASM 약 168MB)를 Hugging Face(`imgly/isnet-general-onnx`, MIT)에서 한 번 내려받아
    Cache Storage에 보관합니다. 로고·글자는 속성 패널의 "단색 배경" 방식이 더 깔끔합니다.
-   업스케일은 여전히 리샘플링 확대이므로 디테일 복원은 데스크톱 버전을 권장합니다.
+   업스케일도 AI입니다(v0.5.1): "일반 사진"은 realesr-general-x4v3(WebGPU), "일러스트·애니"는
+   AnimeVideo-v3(WASM)를 타일 단위로 실행합니다. 1.5배 이하 확대와 AI 실패 시에는 단계별
+   리샘플로 처리합니다. 이어하기(중단 후 재개)는 데스크톱 전용입니다.
 3. **초대형 문서**: 브라우저 캔버스 상한(약 2.7억 픽셀)때문에 **100cm×2m 문서는
    내보내기에 실패**할 수 있습니다. 50cm×2m, 100cm×1m 이하 권장.
 4. **자동저장**: 씬 변경 후 약 1.5초 뒤 IndexedDB에 기록되며 재방문 시 복원
@@ -75,3 +80,12 @@ Electron에서 수신자가 없는 inert 코드).
 `web/e2e/web-e2e.mjs` — `vite preview` 서버에 Playwright(playwright-core)로
 문서 생성 → 이미지 주입 → 이동 → PNG 내보내기(pHYs·치수 검증) → .dtf 저장 →
 자동저장 복원을 실측합니다.
+
+## 배포 빌드 검증 주의 (2026-11-23 결함 기록)
+
+AI 워커(onnxruntime-web)는 **개발 서버와 배포 빌드에서 동작이 다를 수 있습니다.** v0.5.0은
+개발 서버에서만 확인해, 배포 빌드에서 AI 배경 제거가 "AI 준비 중"에서 멈추는 결함을 놓쳤습니다
+(번들판 런타임이 스레드 워커를 자기 스크립트 URL로 다시 띄우는데 Vite가 이를 워커 청크에 합침 →
+`ai/ortRuntime.ts`에서 `.mjs`·`.wasm`을 별도 자산으로 명시해 해결). AI 관련 변경은 반드시
+`npm run web:build && npm run web:preview`로 띄운 **배포용 빌드**에서 배경 제거·업스케일을 실행해
+확인하세요.

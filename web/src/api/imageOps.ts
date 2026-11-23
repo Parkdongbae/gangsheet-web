@@ -19,6 +19,8 @@ import {
 import type { RemoveBgProgress, UpscaleOptions, UpscaleProgress } from '@shared/ipc'
 import { removeBackgroundAi } from './bgRemoval/bgClient'
 import { removeSolidBackgroundPixels } from './bgRemoval/matting'
+import { AI_UPSCALE_CANCELLED, upscaleWithAi } from './upscale/upClient'
+import { planPasses } from './upscale/tiles'
 import { injectPngDpi } from './pngMeta'
 
 export const PREVIEW_MAX_PX = 2048
@@ -202,7 +204,15 @@ export interface UpscaleRunResult {
   totalScale: number
   steps: Array<{ step: number; scale: number; outW: number; outH: number; ms: number }>
   plan: UpscalePlan
+  /** 실제로 쓰인 방식 — ai-fallback은 AI 실패로 리샘플 대체된 경우 */
+  method: 'ai' | 'resample' | 'ai-fallback'
 }
+
+/** AI 통과 결과 픽셀 상한 — 브라우저 캔버스·메모리 여유를 고려한 값 */
+const MAX_AI_OUTPUT_PIXELS = 100_000_000
+/** 진행률 배분 — 모델 준비 10%, 타일 추론 88%, 저장 2% */
+const AI_PREP_SHARE = 0.1
+const AI_TILE_SHARE = 0.88
 
 function drawScaled(
   source: HTMLCanvasElement,
@@ -229,9 +239,9 @@ function drawScaled(
 }
 
 /**
- * 공유 Plan Builder가 산출한 체인(2배씩 등)대로 단계별 리샘플 업스케일.
- * AI 초해상화(RealESRGAN)가 아니므로 새 디테일은 생성되지 않는다 —
- * 웹 버전 차이는 web/README.md와 다이얼로그 안내로 명시.
+ * 업스케일 — 배율이 큰 경우(plan.aiUsed) 브라우저 내 AI(Real-ESRGAN, upscale/)로
+ * 디테일을 복원하며 키우고, 작은 배율이나 AI 실패 시에는 공유 Plan Builder 체인대로
+ * 단계별 고품질 리샘플로 처리한다.
  */
 export async function runUpscale(
   blob: Blob,
@@ -268,22 +278,92 @@ export async function runUpscale(
     current = cropped
   }
 
-  const weights = cumulativeSquareWeights(plan.chain)
   const steps: UpscaleRunResult['steps'] = []
-  for (const [index, scale] of plan.chain.entries()) {
+  let method: UpscaleRunResult['method'] = 'resample'
+
+  // --- AI 확대: 배율이 커서 리샘플만으로는 흐려지는 경우(plan.aiUsed) ---
+  const passes = plan.aiUsed
+    ? planPasses(current.width, current.height, plan.totalScale, MAX_AI_OUTPUT_PIXELS)
+    : 0
+  if (passes > 0) {
     const started = performance.now()
-    const outW = Math.max(1, Math.round(current.width * scale))
-    const outH = Math.max(1, Math.round(current.height * scale))
-    current = drawScaled(current, outW, outH, false)
-    steps.push({ step: index + 1, scale, outW, outH, ms: Math.round(performance.now() - started) })
-    onProgress({
-      stage: 'step',
-      step: index + 1,
-      totalSteps: plan.chain.length,
-      current: index + 1,
-      total: plan.chain.length,
-      overallProgress: overallProgress(weights, index + 1, 1)
-    })
+    const baseW = current.width
+    const baseH = current.height
+    const totalSteps = plan.chain.length
+    const report = (overall: number, stage: UpscaleProgress['stage'], cur = 0, total = 1): void =>
+      onProgress({
+        stage,
+        step: Math.min(totalSteps, Math.floor(overall * totalSteps) + 1),
+        totalSteps,
+        current: cur,
+        total,
+        overallProgress: overall
+      })
+    try {
+      const bitmap = await upscaleWithAi(
+        await createImageBitmap(current),
+        options.engine ?? 'general',
+        passes,
+        (p) => {
+          if (p.stage === 'download') report(AI_PREP_SHARE * 0.8 * (p.ratio ?? 0), 'step')
+          else if (p.stage === 'init') report(AI_PREP_SHARE, 'step')
+          else if (p.stage === 'tile')
+            report(
+              AI_PREP_SHARE + AI_TILE_SHARE * ((p.current ?? 0) / Math.max(1, p.total ?? 1)),
+              'tile',
+              p.current,
+              p.total
+            )
+          else report(0.99, 'encode')
+        }
+      )
+      const enlarged = decodeToCanvas(bitmap, bitmap.width, bitmap.height).canvas
+      bitmap.close()
+      // 모델은 4배 단위라 남는 배율은 고품질 축소·확대로 정확히 맞춘다
+      const wantW = Math.max(1, Math.round(baseW * plan.totalScale))
+      const wantH = Math.max(1, Math.round(baseH * plan.totalScale))
+      current =
+        enlarged.width === wantW && enlarged.height === wantH
+          ? enlarged
+          : drawScaled(enlarged, wantW, wantH, false)
+      steps.push({
+        step: 1,
+        scale: plan.totalScale,
+        outW: current.width,
+        outH: current.height,
+        ms: Math.round(performance.now() - started)
+      })
+      method = 'ai'
+    } catch (err) {
+      if (err instanceof Error && err.message === AI_UPSCALE_CANCELLED) throw err
+      console.warn('[up] AI 업스케일 실패 — 리샘플로 대체', err)
+      method = 'ai-fallback'
+    }
+  }
+
+  if (method !== 'ai') {
+    const weights = cumulativeSquareWeights(plan.chain)
+    for (const [index, scale] of plan.chain.entries()) {
+      const started = performance.now()
+      const outW = Math.max(1, Math.round(current.width * scale))
+      const outH = Math.max(1, Math.round(current.height * scale))
+      current = drawScaled(current, outW, outH, false)
+      steps.push({
+        step: index + 1,
+        scale,
+        outW,
+        outH,
+        ms: Math.round(performance.now() - started)
+      })
+      onProgress({
+        stage: 'step',
+        step: index + 1,
+        totalSteps: plan.chain.length,
+        current: index + 1,
+        total: plan.chain.length,
+        overallProgress: overallProgress(weights, index + 1, 1)
+      })
+    }
   }
 
   if (current.width !== plan.target.width || current.height !== plan.target.height) {
@@ -310,6 +390,7 @@ export async function runUpscale(
     height: current.height,
     totalScale: plan.totalScale,
     steps,
-    plan
+    plan,
+    method
   }
 }
