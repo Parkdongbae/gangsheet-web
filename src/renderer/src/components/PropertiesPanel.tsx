@@ -31,6 +31,7 @@ import {
   ZoomIn
 } from 'lucide-react'
 import { cmToPx, pxToCm } from '../../../core/math'
+import type { BgRemovalMode, RemoveBgProgress } from '../../../types/ipc'
 import { normalizeRotation, type LayerOrderOp } from './canvas/placement'
 import type { AlignOp, DocAlignOp } from './canvas/alignment'
 import type { PlacedImage } from './canvas/ProxyCanvas'
@@ -58,6 +59,12 @@ export interface PropertiesPanelProps {
   removeProgress: { current: number; total: number } | null
   /** 배경 제거 사이트 다이얼로그 열기 */
   onOpenBgSites: () => void
+  /** 선택 가능한 배경 제거 방식 — 없으면(데스크톱) 선택 UI 숨김 */
+  bgModes?: readonly BgRemovalMode[]
+  bgMode: BgRemovalMode
+  onBgMode: (mode: BgRemovalMode) => void
+  /** 배경 제거 세부 단계 — 모델 다운로드 % 등 */
+  bgStage: RemoveBgProgress | null
   /** 업스케일 다이얼로그 열기 — 단일 선택 편집 패널에서만 노출 */
   onOpenUpscale: () => void
 }
@@ -123,7 +130,7 @@ function NumField({
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+      <label className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
         {label}
       </label>
       <div
@@ -147,7 +154,7 @@ function NumField({
           }}
           className="w-full bg-transparent px-2 py-1.5 text-sm tabular-nums text-zinc-200 outline-none"
         />
-        <span className="px-2 text-[10px] font-medium text-zinc-500">{unit}</span>
+        <span className="px-2 text-[11px] font-medium text-zinc-500">{unit}</span>
       </div>
     </div>
   )
@@ -191,6 +198,63 @@ const DOC_ALIGN_BUTTONS: ReadonlyArray<{ op: DocAlignOp; label: string }> = [
   { op: 'docBottom', label: '문서 하단에 정렬' }
 ]
 
+function bgStageLabel(stage: RemoveBgProgress | null): string {
+  if (!stage) return '처리 중…'
+  switch (stage.stage) {
+    case 'download':
+      return `AI 모델 받는 중 ${Math.round((stage.ratio ?? 0) * 100)}%`
+    case 'init':
+      return 'AI 준비 중…'
+    case 'infer':
+      return '배경 분석 중…'
+    default:
+      return '경계 다듬는 중…'
+  }
+}
+
+const BG_MODE_LABELS: Record<BgRemovalMode, { label: string; hint: string }> = {
+  ai: { label: 'AI 자동', hint: '사진 · 일러스트' },
+  solid: { label: '단색 배경', hint: '로고 · 글자' }
+}
+
+function BgModePicker({
+  modes,
+  value,
+  onChange,
+  disabled
+}: {
+  modes: readonly BgRemovalMode[]
+  value: BgRemovalMode
+  onChange: (mode: BgRemovalMode) => void
+  disabled: boolean
+}): React.JSX.Element {
+  return (
+    <div role="radiogroup" aria-label="배경 제거 방식" className="mb-2 grid grid-cols-2 gap-1.5">
+      {modes.map((mode) => {
+        const active = mode === value
+        return (
+          <button
+            key={mode}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={disabled}
+            onClick={() => onChange(mode)}
+            className={`flex flex-col items-center rounded-md border px-2 py-1.5 transition-colors disabled:pointer-events-none disabled:opacity-40 ${
+              active
+                ? 'border-indigo-500 bg-indigo-500/15 text-indigo-300'
+                : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
+            }`}
+          >
+            <span className="text-xs font-semibold">{BG_MODE_LABELS[mode].label}</span>
+            <span className="text-[11px] text-zinc-500">{BG_MODE_LABELS[mode].hint}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 export function PropertiesPanel({
   item,
   itemCount,
@@ -208,16 +272,30 @@ export function PropertiesPanel({
   removeBusy,
   removeProgress,
   onOpenBgSites,
+  bgModes,
+  bgMode,
+  onBgMode,
+  bgStage,
   onOpenUpscale
 }: PropertiesPanelProps): React.JSX.Element {
   const [linked, setLinked] = useState(true)
   const multi = !item && multiSelectedCount >= 2
   const canDistribute = alignUnitCount >= 3
   /** 진행 중 라벨 — 배치면 n/N, 단일이면 스피너만 */
-  const removeBusyLabel =
+  const batchSuffix =
     removeProgress && removeProgress.total > 1
-      ? `처리 중 (${removeProgress.current}/${removeProgress.total})…`
-      : '처리 중…'
+      ? ` (${Math.min(removeProgress.current + 1, removeProgress.total)}/${removeProgress.total})`
+      : ''
+  const removeBusyLabel = `${bgStageLabel(bgStage)}${batchSuffix}`
+  const bgModePicker =
+    bgModes && bgModes.length > 1 ? (
+      <BgModePicker modes={bgModes} value={bgMode} onChange={onBgMode} disabled={removeBusy} />
+    ) : null
+  const bgHelp = !bgModes
+    ? 'AI가 피사체를 인식해 배경을 투명하게 만듭니다. 기본 모델이 앱에 포함되어 있어 오프라인에서도 바로 동작합니다.'
+    : bgMode === 'solid'
+      ? '가장자리와 이어진 한 가지 색 배경만 지웁니다. 흰 바탕의 로고·글자처럼 경계가 또렷한 그림에 알맞습니다.'
+      : 'AI가 사람·사물을 알아보고 배경을 지웁니다. 처음 한 번만 AI 모델(85~170MB)을 내려받으며, 이미지는 내 컴퓨터 밖으로 나가지 않습니다.'
 
   const commitWidth = (valueCm: number): void => {
     if (!item || valueCm <= 0) return
@@ -234,11 +312,11 @@ export function PropertiesPanel({
   }
 
   return (
-    <aside className="flex h-full w-72 shrink-0 flex-col border-l border-zinc-800 bg-zinc-950">
+    <aside className="flex h-full w-80 shrink-0 flex-col border-l border-zinc-800 bg-zinc-950">
       <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-3">
         <div className="flex flex-col">
           <span className="text-sm font-semibold text-zinc-100">속성</span>
-          <span className="max-w-[180px] truncate text-[10px] text-zinc-500">
+          <span className="max-w-[180px] truncate text-[11px] text-zinc-500">
             {multi
               ? `${multiSelectedCount}개 다중 선택`
               : item
@@ -246,7 +324,7 @@ export function PropertiesPanel({
                 : '선택 없음'}
           </span>
         </div>
-        <span className="rounded border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 text-[10px] tabular-nums text-zinc-500">
+        <span className="rounded border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 text-[11px] tabular-nums text-zinc-500">
           {itemCount}개
         </span>
       </div>
@@ -293,7 +371,7 @@ export function PropertiesPanel({
                 <AlignVerticalJustifyCenter size={ICON.size} strokeWidth={ICON.strokeWidth} />
               </IconBtn>
             </div>
-            <div className="mt-3 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+            <div className="mt-3 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
               문서 기준 (선택 전체)
             </div>
             <div className="mt-1 grid grid-cols-3 gap-1.5">
@@ -315,7 +393,7 @@ export function PropertiesPanel({
                 </IconBtn>
               ))}
             </div>
-            <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
+            <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
               {multiSelectedCount}개 항목을 회전된 표시 영역 기준으로 정렬합니다. 그룹은 하나의
               단위로 움직여 내부 배치가 유지되고, 간격 분배는 그룹 포함 3유닛 이상부터 가능합니다.
               문서 기준은 선택 전체를 문서 가장자리·중앙에 맞춥니다. 모든 정렬은 Ctrl+Z로 되돌릴 수
@@ -346,7 +424,7 @@ export function PropertiesPanel({
                 <ArrowDownToLine size={ICON.size} strokeWidth={ICON.strokeWidth} />
               </IconBtn>
             </div>
-            <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
+            <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
               선택 {multiSelectedCount}개의 상대 레이어 순서를 유지한 채 통째로 이동합니다.
             </p>
           </Section>
@@ -354,6 +432,7 @@ export function PropertiesPanel({
             title="배경 제거"
             icon={<Eraser size={ICON.size} strokeWidth={ICON.strokeWidth} />}
           >
+            {bgModePicker}
             <button
               type="button"
               onClick={onRemoveBg}
@@ -369,18 +448,18 @@ export function PropertiesPanel({
               )}
               {removeBusy ? removeBusyLabel : `배경 제거 (${multiSelectedCount}개)`}
             </button>
-            <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
-              선택 {multiSelectedCount}개를 순차 처리해 배경을 투명하게 만듭니다. 완료된 항목은 즉시
-              캔버스에 반영되고 전체가 한 단계로 Ctrl+Z 복구됩니다.
+            <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+              선택한 {multiSelectedCount}개를 차례로 처리합니다. {bgHelp} 전체를 Ctrl+Z 한 번으로
+              되돌릴 수 있습니다.
             </p>
             <button
               type="button"
               onClick={onOpenBgSites}
-              title="고해상도 다운로드가 가능한 무료 AI 누끼 서비스 모음 열기"
+              title="결과가 마음에 들지 않을 때 쓸 수 있는 무료 배경 제거 사이트 모음"
               className="mt-1.5 flex w-full items-center justify-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-800 active:scale-[0.98]"
             >
               <Globe size={13} strokeWidth={1.5} className="text-zinc-400" />
-              배경 제거 사이트…
+              다른 배경 제거 사이트 보기
             </button>
           </Section>
           <div className="flex flex-col items-center gap-2 px-6 py-8 text-center">
@@ -388,7 +467,7 @@ export function PropertiesPanel({
             <span className="text-xs text-zinc-500">
               {multiSelectedCount}개 항목이 선택되었습니다
             </span>
-            <span className="text-[10px] text-zinc-600">
+            <span className="text-[11px] text-zinc-600">
               드래그하면 함께 이동하고 · Ctrl+클릭으로 개별 해제 · 1개만 남기면 수치 편집이
               가능합니다
             </span>
@@ -398,17 +477,17 @@ export function PropertiesPanel({
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
           <MousePointerClick size={20} strokeWidth={1.5} className="text-zinc-600" />
           <span className="text-xs text-zinc-500">선택된 항목 없음</span>
-          <span className="text-[10px] text-zinc-600">
+          <span className="text-[11px] text-zinc-600">
             캔버스에서 이미지를 클릭하면 위치·크기·레이어를 편집할 수 있습니다
           </span>
           <button
             type="button"
             onClick={onOpenBgSites}
-            title="고해상도 다운로드가 가능한 무료 AI 누끼 서비스 모음 열기"
+            title="결과가 마음에 들지 않을 때 쓸 수 있는 무료 배경 제거 사이트 모음"
             className="mt-3 flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-800 active:scale-[0.98]"
           >
             <Globe size={13} strokeWidth={1.5} className="text-zinc-400" />
-            배경 제거 사이트…
+            다른 배경 제거 사이트 보기
           </button>
         </div>
       ) : (
@@ -476,7 +555,7 @@ export function PropertiesPanel({
                 onCommit={(v) => onUpdate({ rotation: normalizeRotation(v) })}
               />
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
                   변형
                 </span>
                 <IconBtn label="90도 회전" onClick={onRotate90} disabled={item.locked === true}>
@@ -497,7 +576,7 @@ export function PropertiesPanel({
                 )}
               </IconBtn>
               {item.locked && (
-                <p className="flex-1 self-center text-[10px] leading-relaxed text-amber-500/90">
+                <p className="flex-1 self-center text-[11px] leading-relaxed text-amber-500/90">
                   잠김 — 이동·리사이즈·삭제·정렬이 차단됩니다. Ctrl+L 또는 버튼으로 해제.
                 </p>
               )}
@@ -532,7 +611,7 @@ export function PropertiesPanel({
                 </IconBtn>
               ))}
             </div>
-            <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
+            <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
               회전된 표시 영역 기준으로 문서 가장자리·중앙에 맞춥니다 (선택 1개만으로 동작).
             </p>
           </Section>
@@ -556,7 +635,7 @@ export function PropertiesPanel({
               </IconBtn>
             </div>
             {selectedIndex !== null && (
-              <p className="mt-2 text-[10px] tabular-nums text-zinc-500">
+              <p className="mt-2 text-[11px] tabular-nums text-zinc-500">
                 현재 레이어 <span className="text-zinc-300">{selectedIndex + 1}</span> / {itemCount}
               </p>
             )}
@@ -566,6 +645,7 @@ export function PropertiesPanel({
             title="배경 제거"
             icon={<Eraser size={ICON.size} strokeWidth={ICON.strokeWidth} />}
           >
+            {bgModePicker}
             <button
               type="button"
               onClick={onRemoveBg}
@@ -579,18 +659,17 @@ export function PropertiesPanel({
               )}
               {removeBusy ? removeBusyLabel : '배경 제거'}
             </button>
-            <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
-              AI 누끼로 배경을 투명하게 제거합니다. 기본 모델은 앱에 포함되어 있어 첫 사용부터
-              오프라인으로 즉시 동작합니다. Ctrl+Z로 되돌릴 수 있습니다.
+            <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+              {bgHelp} Ctrl+Z로 되돌릴 수 있습니다.
             </p>
             <button
               type="button"
               onClick={onOpenBgSites}
-              title="고해상도 다운로드가 가능한 무료 AI 누끼 서비스 모음 열기"
+              title="결과가 마음에 들지 않을 때 쓸 수 있는 무료 배경 제거 사이트 모음"
               className="mt-1.5 flex w-full items-center justify-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-800 active:scale-[0.98]"
             >
               <Globe size={13} strokeWidth={1.5} className="text-zinc-400" />
-              배경 제거 사이트…
+              다른 배경 제거 사이트 보기
             </button>
           </Section>
 
@@ -606,7 +685,7 @@ export function PropertiesPanel({
               <ZoomIn size={ICON.size} strokeWidth={ICON.strokeWidth} />
               업스케일…
             </button>
-            <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
+            <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
               원본이 작아 인쇄 시 흐릿하다면 AI로 키우세요. 최종 크기를 cm로 정하면 필요한 해상도를
               자동으로 계산합니다. Ctrl+Z로 되돌릴 수 있습니다.
             </p>
@@ -629,7 +708,7 @@ export function PropertiesPanel({
       )}
 
       <div className="flex flex-col gap-1.5 border-t border-zinc-800 px-3 py-2.5">
-        <div className="flex items-center justify-between text-[10px] tabular-nums text-zinc-500">
+        <div className="flex items-center justify-between text-[11px] tabular-nums text-zinc-500">
           <span>{item ? '선택 영역' : multi ? '다중 선택' : '문서'}</span>
           <span className="text-zinc-300">
             {item

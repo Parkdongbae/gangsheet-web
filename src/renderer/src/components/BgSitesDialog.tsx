@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { ExternalLink, FileText, Globe, TriangleAlert } from 'lucide-react'
+import { ExternalLink, FileText, Globe } from 'lucide-react'
 
 /** 무료 AI 배경 제거 웹 서비스 — target="_blank"는 setWindowOpenHandler가 시스템 브라우저로 라우팅 */
 interface BgRemovalSite {
@@ -7,12 +7,17 @@ interface BgRemovalSite {
   url: string
   /** DTF 인쇄 추천(원본 해상도 보존) 배지 */
   recommended?: boolean
-  /** 무료 다운로드 해상도 제한 등 주의 표시 */
-  caution?: boolean
   description: string
 }
 
 const BG_REMOVAL_SITES: readonly BgRemovalSite[] = [
+  {
+    name: 'Canva',
+    url: 'https://www.canva.com/features/background-remover/',
+    recommended: true,
+    description:
+      '사진을 올리고 "배경 제거"를 한 번 누르면 끝나는 가장 쉬운 방법입니다. 지운 뒤 같은 화면에서 글자·도형을 더해 디자인까지 마무리하고 투명 배경 PNG로 내려받을 수 있습니다.'
+  },
   {
     name: 'Adobe Express',
     url: 'https://www.adobe.com/express/feature/image/remove-background/',
@@ -38,13 +43,6 @@ const BG_REMOVAL_SITES: readonly BgRemovalSite[] = [
     url: 'https://clipdrop.co/remove-background',
     description:
       '생성형 AI 전문 기업의 모델을 사용해 복잡한 윤곽선 감지 능력이 좋습니다. 디테일한 피사체를 깔끔하게 분리할 때 유용합니다.'
-  },
-  {
-    name: 'Remove.bg',
-    url: 'https://www.remove.bg/',
-    caution: true,
-    description:
-      '가장 유명하고 직관적인 배경 제거 서비스. 단, 무료 이용 시 저해상도(약 500px 프리뷰)로만 다운로드되므로 간단한 시안 확인용에 적합합니다.'
   }
 ]
 
@@ -64,11 +62,11 @@ export function BgSitesDialog({ onClose }: BgSitesDialogProps): React.JSX.Elemen
 
   return (
     <div
-      className="fixed inset-0 z-10 flex items-center justify-center bg-zinc-950/70 backdrop-blur-[2px]"
+      className="fixed inset-0 z-10 flex items-center justify-center dtf-scrim"
       onMouseDown={onClose}
     >
       <form
-        className="flex max-h-[86vh] w-[420px] flex-col rounded-lg border border-zinc-800 bg-zinc-900 p-4 shadow-2xl"
+        className="flex max-h-[86vh] w-[460px] flex-col rounded-xl border border-zinc-800 bg-zinc-900 p-4 shadow-2xl"
         role="dialog"
         aria-label="배경 제거 사이트"
         onMouseDown={(e) => e.stopPropagation()}
@@ -81,8 +79,8 @@ export function BgSitesDialog({ onClose }: BgSitesDialogProps): React.JSX.Elemen
           <Globe size={16} strokeWidth={1.5} className="text-zinc-400" />
           <div className="flex flex-col">
             <h2 className="text-sm font-semibold text-zinc-100">배경 제거 사이트</h2>
-            <span className="text-[10px] text-zinc-500">
-              고해상도 다운로드가 가능한 무료 AI 누끼 서비스 모음
+            <span className="text-[11px] text-zinc-500">
+              앱의 배경 제거 결과가 아쉬울 때 쓸 수 있는 무료 사이트
             </span>
           </div>
         </div>
@@ -100,14 +98,8 @@ export function BgSitesDialog({ onClose }: BgSitesDialogProps): React.JSX.Elemen
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-zinc-100">
                   {site.name}
                   {site.recommended && (
-                    <span className="rounded border border-indigo-500/60 bg-indigo-500/15 px-1 py-px text-[9px] font-semibold text-indigo-300">
+                    <span className="rounded border border-indigo-500/60 bg-indigo-500/15 px-1 py-px text-[10px] font-semibold text-indigo-300">
                       DTF 추천
-                    </span>
-                  )}
-                  {site.caution && (
-                    <span className="flex items-center gap-0.5 text-[9px] font-medium text-amber-400">
-                      <TriangleAlert size={10} strokeWidth={1.5} />
-                      무료 다운로드 저해상도
                     </span>
                   )}
                 </span>
@@ -117,16 +109,15 @@ export function BgSitesDialog({ onClose }: BgSitesDialogProps): React.JSX.Elemen
                   className="shrink-0 text-zinc-600 transition-colors group-hover:text-zinc-300"
                 />
               </span>
-              <span className="mt-1 block text-[11px] leading-relaxed text-zinc-400">
+              <span className="mt-1 block text-xs leading-relaxed text-zinc-400">
                 {site.description}
               </span>
             </a>
           ))}
 
-          <p className="mt-1 rounded-md border border-indigo-500/30 bg-indigo-500/10 px-3 py-2.5 text-[11px] leading-relaxed text-zinc-300">
-            DTF 인쇄처럼 원본 픽셀 보존이 중요한 작업에는 해상도를 줄이지 않는{' '}
-            <span className="font-semibold text-indigo-300">Adobe Express</span>·
-            <span className="font-semibold text-indigo-300">Erase.bg</span>를 우선 사용하세요.
+          <p className="mt-1 rounded-md border border-indigo-500/30 bg-indigo-500/10 px-3 py-2.5 text-xs leading-relaxed text-zinc-300">
+            받은 PNG를 캔버스에 끌어다 놓으면 됩니다. DTF 인쇄는 원본 크기가 중요하니, 내려받을 때
+            해상도가 줄어들지 않았는지 확인하세요.
           </p>
 
           <button

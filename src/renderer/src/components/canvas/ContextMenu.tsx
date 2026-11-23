@@ -100,7 +100,7 @@ function MenuItem({
       {icon !== undefined && <span className="text-zinc-400">{icon}</span>}
       <span className="flex-1">{label}</span>
       {shortcut !== undefined && (
-        <span className="text-[10px] tabular-nums text-zinc-500">{shortcut}</span>
+        <span className="text-[11px] tabular-nums text-zinc-500">{shortcut}</span>
       )}
     </button>
   )
@@ -204,7 +204,7 @@ export function ContextMenu({
         onClick={onUngroup}
       />
       <MenuSep />
-      <div className="px-2.5 pb-1 pt-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+      <div className="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
         레이어 순서
       </div>
       <div className="grid grid-cols-4 gap-1 px-1.5">
@@ -223,7 +223,7 @@ export function ContextMenu({
         ))}
       </div>
       <MenuSep />
-      <div className="px-2.5 pb-1 pt-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+      <div className="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
         정렬{canAlign ? ` (${selectionCount}개 선택 기준)` : ' (선택 2개 이상)'}
       </div>
       <div className="grid grid-cols-3 gap-1 px-1.5">
@@ -248,7 +248,7 @@ export function ContextMenu({
           title="수평 간격 균등 분배 (그룹 포함 3유닛 이상)"
           aria-label="수평 간격 균등 분배 (그룹 포함 3유닛 이상)"
           onClick={() => onAlign('distH')}
-          className="flex h-7 items-center justify-center gap-1 rounded-md text-[10px] text-zinc-400 transition-colors hover:bg-zinc-800 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+          className="flex h-7 items-center justify-center gap-1 rounded-md text-[11px] text-zinc-400 transition-colors hover:bg-zinc-800 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
         >
           <AlignHorizontalJustifyCenter size={ICON.size} strokeWidth={ICON.strokeWidth} />
           수평 분배
@@ -259,14 +259,14 @@ export function ContextMenu({
           title="수직 간격 균등 분배 (그룹 포함 3유닛 이상)"
           aria-label="수직 간격 균등 분배 (그룹 포함 3유닛 이상)"
           onClick={() => onAlign('distV')}
-          className="flex h-7 items-center justify-center gap-1 rounded-md text-[10px] text-zinc-400 transition-colors hover:bg-zinc-800 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+          className="flex h-7 items-center justify-center gap-1 rounded-md text-[11px] text-zinc-400 transition-colors hover:bg-zinc-800 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
         >
           <AlignVerticalJustifyCenter size={ICON.size} strokeWidth={ICON.strokeWidth} />
           수직 분배
         </button>
       </div>
       <MenuSep />
-      <div className="px-2.5 pb-1 pt-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+      <div className="px-2.5 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
         문서 기준 정렬{hasSelection ? '' : ' (선택 필요)'}
       </div>
       <div className="grid grid-cols-3 gap-1 px-1.5 pb-1">

@@ -66,7 +66,7 @@ function StepperField({
     'flex flex-1 items-center justify-center px-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-100 active:bg-zinc-700'
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">{label}</span>
+      <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">{label}</span>
       <div className="flex items-stretch rounded-md border border-zinc-800 bg-zinc-950 transition-all focus-within:ring-1 focus-within:ring-indigo-500">
         <input
           type="number"
@@ -78,7 +78,7 @@ function StepperField({
           onChange={(e) => onChange(e.target.value)}
           className={INPUT_CLASS}
         />
-        <span className="flex items-center px-1.5 text-[10px] text-zinc-500">{unit}</span>
+        <span className="flex items-center px-1.5 text-[11px] text-zinc-500">{unit}</span>
         <span className="flex flex-col border-l border-zinc-800">
           <button
             type="button"
@@ -152,7 +152,7 @@ export function GridDialog({
 
   return (
     <div
-      className="fixed inset-0 z-10 flex items-center justify-center bg-zinc-950/70 backdrop-blur-[2px]"
+      className="fixed inset-0 z-10 flex items-center justify-center dtf-scrim"
       onMouseDown={onClose}
     >
       <form

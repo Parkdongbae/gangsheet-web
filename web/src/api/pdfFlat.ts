@@ -15,7 +15,8 @@ export interface PdfImageSource {
   jpeg: Uint8Array<ArrayBuffer>
 }
 
-const ascii = (text: string): Uint8Array<ArrayBuffer> => Uint8Array.from(text, (ch) => ch.charCodeAt(0))
+const ascii = (text: string): Uint8Array<ArrayBuffer> =>
+  Uint8Array.from(text, (ch) => ch.charCodeAt(0))
 
 const PT_PER_PX = (dpi: number): number => 72 / dpi
 

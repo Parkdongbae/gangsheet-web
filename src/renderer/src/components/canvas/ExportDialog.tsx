@@ -100,7 +100,7 @@ export function ExportDialog({
 
   return (
     <div
-      className="fixed inset-0 z-10 flex items-center justify-center bg-zinc-950/70 backdrop-blur-[2px]"
+      className="fixed inset-0 z-10 flex items-center justify-center dtf-scrim"
       onMouseDown={rendering ? undefined : onClose}
       role="dialog"
       aria-label="내보내기"
@@ -144,7 +144,7 @@ export function ExportDialog({
                     <Layers size={14} strokeWidth={1.5} />
                     PSD
                   </span>
-                  <span className="text-[10px] text-zinc-500">
+                  <span className="text-[11px] text-zinc-500">
                     {window.api.exportColorMode ?? 'CMYK'} · 350 DPI
                   </span>
                 </div>
@@ -172,7 +172,7 @@ export function ExportDialog({
                     <ImageIcon size={14} strokeWidth={1.5} />
                     PNG
                   </span>
-                  <span className="text-[10px] text-zinc-500">알파 검수용</span>
+                  <span className="text-[11px] text-zinc-500">알파 검수용</span>
                 </div>
               </label>
               <label className="cursor-pointer">
@@ -198,7 +198,7 @@ export function ExportDialog({
                     <FileText size={14} strokeWidth={1.5} />
                     PDF
                   </span>
-                  <span className="text-[10px] text-zinc-500">인쇄 검수용</span>
+                  <span className="text-[11px] text-zinc-500">인쇄 검수용</span>
                 </div>
               </label>
             </div>
@@ -249,7 +249,7 @@ export function ExportDialog({
               완료 — {result.width_px.toLocaleString()} × {result.height_px.toLocaleString()} px ·
               레이어 {result.layer_count} · {(result.duration_ms / 1000).toFixed(1)}초
             </span>
-            <span className="break-all text-[10px] font-normal text-zinc-500">
+            <span className="break-all text-[11px] font-normal text-zinc-500">
               {result.output_path}
             </span>
           </p>

@@ -16,6 +16,9 @@ import type {
   ImportedImage,
   OpenedProject,
   RemoveBgImage,
+  RemoveBgOptions,
+  RemoveBgProgress,
+  ResumableSession,
   TrimmedImage,
   UpscaleOptions,
   UpscaleProgress,
@@ -68,6 +71,7 @@ function makeListenerBus<T>(): {
 
 const exportBus = makeListenerBus<ExportProgress>()
 const upscaleBus = makeListenerBus<UpscaleProgress>()
+const removeBgBus = makeListenerBus<RemoveBgProgress>()
 
 type WorkerMessage =
   | { type: 'progress'; stage: 'items' | 'write'; current: number; total: number }
@@ -246,11 +250,19 @@ function createWebApi(): DtfApi {
       return buildImported(requireBlob(filePath))
     },
 
-    async removeBackground(filePath: string): Promise<RemoveBgImage> {
+    async removeBackground(filePath: string, options?: RemoveBgOptions): Promise<RemoveBgImage> {
       await ensureVfs()
-      const result = await ops.removeSolidBackground(requireBlob(filePath))
+      const source = requireBlob(filePath)
+      const result =
+        options?.mode === 'solid'
+          ? await ops.removeSolidBackground(source)
+          : await ops.removeBackgroundWithAi(source, removeBgBus.emit)
       const newPath = registerBlob(`${stripExt(vfsFileName(filePath))}_nobg.png`, result)
       return { ...(await buildImported(result)), filePath: newPath }
+    },
+
+    onRemoveBgProgress(listener: (progress: RemoveBgProgress) => void): () => void {
+      return removeBgBus.subscribe(listener)
     },
 
     async autoTrimImage(filePath: string): Promise<TrimmedImage> {
@@ -396,7 +408,23 @@ function createWebApi(): DtfApi {
       return { data, filePath: file.name }
     },
 
+    async getResumableSession(): Promise<ResumableSession | null> {
+      const saved = await kvGet<{ data: ProjectData; savedAt: number }>(AUTOSAVE_KEY).catch(
+        () => undefined
+      )
+      const images = saved?.data?.images
+      if (!saved || !Array.isArray(images) || images.length === 0) return null
+      return {
+        path: AUTOSAVE_PATH,
+        savedAt: saved.savedAt,
+        imageCount: images.length,
+        widthPx: saved.data.document.widthPx,
+        heightPx: saved.data.document.heightPx
+      }
+    },
+
     exportColorMode: 'RGB',
+    bgRemovalModes: ['ai', 'solid'],
     aiUpscale: false
   }
   return api

@@ -31,6 +31,19 @@ export interface OpenedProject {
   filePath: string
 }
 
+/** 배경 제거 방식 — ai: 피사체 인식(사진·일러스트), solid: 단색 배경 지우기(로고·글자) */
+export type BgRemovalMode = 'ai' | 'solid'
+
+export interface RemoveBgOptions {
+  mode?: BgRemovalMode
+}
+
+/** 배경 제거 진행 단계 — download는 AI 모델 첫 다운로드(ratio 0..1) */
+export interface RemoveBgProgress {
+  stage: 'download' | 'init' | 'infer' | 'refine' | 'encode'
+  ratio?: number
+}
+
 /** 배경 제거 결과 — 처리된 32-bit RGBA PNG가 새 원본이 된다 (치수는 입력과 동일) */
 export interface RemoveBgImage extends ImportedImage {
   /** 배경 제거된 RGBA PNG 절대 경로 — 이후 내보내기·재편집의 원본 */
@@ -180,6 +193,16 @@ export interface ExportResult {
 
 export type { ExportFormat, ExportManifest }
 
+/** 이어서 할 수 있는 직전 작업(웹 자동저장) — 시작 화면의 "이어서 작업하기" 카드용 */
+export interface ResumableSession {
+  /** openProject에 넘기면 해당 작업이 열리는 경로 */
+  path: string
+  savedAt: number
+  imageCount: number
+  widthPx: number
+  heightPx: number
+}
+
 /** 프리로드가 렌더러에 노출하는 에디터 API */
 export interface DtfApi {
   /** 파일 대화상자(다중 선택) — 취소 시 null */
@@ -187,7 +210,9 @@ export interface DtfApi {
   /** 원본 경로만 전달해 임포트 — 프리뷰 dataURL + 원본 px 반환 */
   importImage(filePath: string): Promise<ImportedImage>
   /** 배경 제거(rembg 사이드카) — 처리된 RGBA PNG 경로 + 프리뷰 반환 (v2) */
-  removeBackground(filePath: string): Promise<RemoveBgImage>
+  removeBackground(filePath: string, options?: RemoveBgOptions): Promise<RemoveBgImage>
+  /** 배경 제거 진행 알림 구독(선택) — 웹 구현만 제공 */
+  onRemoveBgProgress?(listener: (progress: RemoveBgProgress) => void): () => void
   /** 투명 여백 자동 제거(사이드카 auto_trim) — 알파 바운딩 박스 크롭 PNG 경로 + 프리뷰 반환 */
   autoTrimImage(filePath: string): Promise<TrimmedImage>
   /** 이미지 헤더 치수·DPI — 업스케일 예상 패널용 (원본 파일 px 기준) */
@@ -226,8 +251,12 @@ export interface DtfApi {
   saveProject(data: ProjectData, path?: string): Promise<string | null>
   /** .dtf 프로젝트 열기 — 데이터 + 파일 경로 반환, 취소 시 null */
   openProject(path?: string): Promise<OpenedProject | null>
+  /** 직전 작업 조회(선택) — 웹 구현만 제공(IndexedDB 자동저장). 없으면 null */
+  getResumableSession?(): Promise<ResumableSession | null>
   /** 내보내기 PSD 색상 모드 — 미정의 시 데스크톱 기본(CMYK). 웹 구현은 RGB로 명시 */
   readonly exportColorMode?: 'CMYK' | 'RGB'
+  /** 선택 가능한 배경 제거 방식 — 미정의 시 데스크톱 기본(rembg AI 단일 방식) */
+  readonly bgRemovalModes?: readonly BgRemovalMode[]
   /** AI 업스케일 엔진 사용 여부 — 미정의 시 데스크톱 기본(true). 웹 구현은 리샘플만(false) */
   readonly aiUpscale?: boolean
 }

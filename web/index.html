@@ -4,10 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DTF GangSheet Studio (Web)</title>
-    <!-- 데스크톱 CSP + blob:(프리뷰·워커 산출물), worker-src 추가 -->
+    <!-- 데스크톱 CSP + blob:(프리뷰·워커 산출물), worker-src 추가.
+         wasm-unsafe-eval·huggingface 연결은 브라우저 내 AI 배경 제거(모델 가중치 다운로드)용 -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob: data:; worker-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob: data: https://huggingface.co https://*.huggingface.co https://*.hf.co; worker-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'"
     />
   </head>
 

@@ -46,7 +46,7 @@ export function GridSettingsDialog({
 
   return (
     <div
-      className="fixed inset-0 z-10 flex items-center justify-center bg-zinc-950/70 backdrop-blur-[2px]"
+      className="fixed inset-0 z-10 flex items-center justify-center dtf-scrim"
       onMouseDown={onClose}
     >
       <form
@@ -83,7 +83,7 @@ export function GridSettingsDialog({
         </div>
 
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
             간격 ({GRID_INTERVAL_MIN_CM}~{GRID_INTERVAL_MAX_CM} cm)
           </span>
           <div className="flex items-center rounded-md border border-zinc-800 bg-zinc-950 transition-all focus-within:ring-1 focus-within:ring-indigo-500">
@@ -97,12 +97,12 @@ export function GridSettingsDialog({
               onBlur={() => setIntervalText(String(settings.intervalCm))}
               className={INPUT_CLASS}
             />
-            <span className="px-2 text-[10px] text-zinc-500">cm</span>
+            <span className="px-2 text-[11px] text-zinc-500">cm</span>
           </div>
         </label>
 
         <div className="mt-3 flex flex-col gap-1.5">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
             색상
           </span>
           <div className="flex items-center gap-1.5">
@@ -150,7 +150,7 @@ export function GridSettingsDialog({
         </div>
 
         <div className="mt-3 flex flex-col gap-1.5">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
             선 스타일
           </span>
           <div className="grid grid-cols-3 gap-1.5">

@@ -384,7 +384,7 @@ export function UpscaleDialog({
 
   return (
     <div
-      className="fixed inset-0 z-10 flex items-center justify-center bg-zinc-950/70 backdrop-blur-[2px]"
+      className="fixed inset-0 z-10 flex items-center justify-center dtf-scrim"
       onMouseDown={() => {
         if (!running) onClose()
       }}
@@ -404,7 +404,7 @@ export function UpscaleDialog({
             <ZoomIn size={16} strokeWidth={1.5} className="text-zinc-400" />
             <div className="flex flex-col">
               <h2 className="text-sm font-semibold text-zinc-100">이미지 업스케일</h2>
-              <span className="text-[10px] text-zinc-500">
+              <span className="text-[11px] text-zinc-500">
                 {info
                   ? `원본 ${info.width}×${info.height}px${info.dpi ? ` · ${info.dpi}DPI` : ''}`
                   : '원본 정보를 읽는 중…'}
@@ -446,12 +446,12 @@ export function UpscaleDialog({
               {progress?.stage === 'tile' ? ` (타일 ${progress.current}/${progress.total})` : ''}
             </p>
             {plan && plan !== 'invalid' && runningMode === 'fresh' && (
-              <p className="text-center text-[10px] text-zinc-500">
+              <p className="text-center text-[11px] text-zinc-500">
                 전체 {plan.totalScale}배 · {chainSummary(plan.chain)} · {plan.chain.length}단계
               </p>
             )}
             {plan && plan !== 'invalid' && runningMode === 'resume' && (
-              <p className="text-center text-[10px] text-zinc-500">
+              <p className="text-center text-[11px] text-zinc-500">
                 이전 완료 단계부터 이어서 처리하고 있어요
               </p>
             )}
@@ -468,7 +468,7 @@ export function UpscaleDialog({
             {/* ① 크기 입력 */}
             <section className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
                   ① 최종 크기
                 </span>
                 <div className="flex overflow-hidden rounded-md border border-zinc-800">
@@ -483,7 +483,7 @@ export function UpscaleDialog({
                       key={u.v}
                       type="button"
                       onClick={() => setUnit(u.v)}
-                      className={`px-2.5 py-1 text-[11px] transition-colors ${
+                      className={`px-2.5 py-1 text-xs transition-colors ${
                         unit === u.v
                           ? 'bg-indigo-600 text-white'
                           : 'bg-zinc-950 text-zinc-400 hover:bg-zinc-800'
@@ -511,7 +511,7 @@ export function UpscaleDialog({
                 </label>
               ) : (
                 <div className="flex items-end gap-1.5">
-                  <label className="flex-1 text-[10px] text-zinc-500">
+                  <label className="flex-1 text-[11px] text-zinc-500">
                     가로 ({unit === 'cm' ? 'cm' : 'px'})
                     <input
                       type="number"
@@ -544,7 +544,7 @@ export function UpscaleDialog({
                       <Link2Off size={14} strokeWidth={1.5} />
                     )}
                   </button>
-                  <label className="flex-1 text-[10px] text-zinc-500">
+                  <label className="flex-1 text-[11px] text-zinc-500">
                     세로 ({unit === 'cm' ? 'cm' : 'px'})
                     <input
                       type="number"
@@ -570,7 +570,7 @@ export function UpscaleDialog({
                     type="button"
                     onClick={() => applyPreset(preset)}
                     title={`${preset.widthCm}×${preset.heightCm}cm · ${preset.dpi}DPI`}
-                    className="rounded-full border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-[10px] text-zinc-300 transition-colors hover:border-indigo-500/60 hover:bg-zinc-800 hover:text-indigo-300 active:scale-95"
+                    className="rounded-full border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-[11px] text-zinc-300 transition-colors hover:border-indigo-500/60 hover:bg-zinc-800 hover:text-indigo-300 active:scale-95"
                   >
                     {preset.label}
                   </button>
@@ -580,7 +580,7 @@ export function UpscaleDialog({
 
             {/* ② 용도 (DPI) */}
             <section className="flex flex-col gap-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+              <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
                 ② 용도 (DPI — 2.54cm당 점 개수)
               </span>
               <div className="flex gap-1.5">
@@ -592,7 +592,7 @@ export function UpscaleDialog({
                       setDpi(preset.value)
                       setCustomDpi(false)
                     }}
-                    className={`flex-1 rounded-md border py-1.5 text-[11px] transition-colors active:scale-95 ${
+                    className={`flex-1 rounded-md border py-1.5 text-xs transition-colors active:scale-95 ${
                       !customDpi && dpi === preset.value
                         ? 'border-indigo-500 bg-indigo-500/15 text-indigo-300'
                         : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:bg-zinc-800'
@@ -604,7 +604,7 @@ export function UpscaleDialog({
                 <button
                   type="button"
                   onClick={() => setCustomDpi(true)}
-                  className={`flex-1 rounded-md border py-1.5 text-[11px] transition-colors active:scale-95 ${
+                  className={`flex-1 rounded-md border py-1.5 text-xs transition-colors active:scale-95 ${
                     customDpi
                       ? 'border-indigo-500 bg-indigo-500/15 text-indigo-300'
                       : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:bg-zinc-800'
@@ -628,7 +628,7 @@ export function UpscaleDialog({
 
             {/* ③ 처리 방식 */}
             <section className="flex flex-col gap-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+              <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
                 ③ 처리 방식
               </span>
               <div className="grid grid-cols-3 gap-1.5">
@@ -638,7 +638,7 @@ export function UpscaleDialog({
                     type="button"
                     title={item.tip}
                     onClick={() => setStrategy(item.value)}
-                    className={`rounded-md border py-1.5 text-[11px] transition-colors active:scale-95 ${
+                    className={`rounded-md border py-1.5 text-xs transition-colors active:scale-95 ${
                       strategy === item.value
                         ? 'border-indigo-500 bg-indigo-500/15 text-indigo-300'
                         : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:bg-zinc-800'
@@ -649,12 +649,12 @@ export function UpscaleDialog({
                 ))}
               </div>
               {window.api.aiUpscale === false ? (
-                <p className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-[10px] leading-relaxed text-zinc-500">
+                <p className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-[11px] leading-relaxed text-zinc-500">
                   웹 버전은 AI 엔진 대신 고품질 단계별 리샘플링으로 확대합니다.
                 </p>
               ) : (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-zinc-500" title="이미지 성격에 맞는 AI 엔진">
+                  <span className="text-[11px] text-zinc-500" title="이미지 성격에 맞는 AI 엔진">
                     엔진
                   </span>
                   {(
@@ -672,7 +672,7 @@ export function UpscaleDialog({
                       type="button"
                       title={item.tip}
                       onClick={() => setEngine(item.v)}
-                      className={`flex-1 rounded-md border py-1.5 text-[11px] transition-colors active:scale-95 ${
+                      className={`flex-1 rounded-md border py-1.5 text-xs transition-colors active:scale-95 ${
                         engine === item.v
                           ? 'border-indigo-500 bg-indigo-500/15 text-indigo-300'
                           : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:bg-zinc-800'
@@ -687,7 +687,7 @@ export function UpscaleDialog({
 
             {/* ④ 예상 정보 */}
             <section className="flex flex-col gap-2 rounded-md border border-zinc-800 bg-zinc-950 p-3">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+              <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
                 ④ 예상 결과
               </span>
               {plan === null || plan === 'invalid' ? (
@@ -735,7 +735,7 @@ export function UpscaleDialog({
                   {plan.warnings.map((code) => (
                     <p
                       key={code}
-                      className="flex items-start gap-1.5 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-[11px] leading-relaxed text-amber-300"
+                      className="flex items-start gap-1.5 rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs leading-relaxed text-amber-300"
                     >
                       <TriangleAlert size={12} strokeWidth={1.5} className="mt-0.5 shrink-0" />
                       {WARNING_TEXT[code]}
@@ -746,7 +746,7 @@ export function UpscaleDialog({
               {plan !== null &&
                 plan !== 'invalid' &&
                 plan.warnings.includes('WARN_RATIO_MISMATCH') && (
-                  <label className="text-[10px] text-zinc-500">
+                  <label className="text-[11px] text-zinc-500">
                     비율 처리 방식
                     <select
                       value={fitMode}
@@ -764,7 +764,7 @@ export function UpscaleDialog({
             </section>
 
             {/* 고급 — 출력 포맷 */}
-            <details className="text-[11px] text-zinc-400">
+            <details className="text-xs text-zinc-400">
               <summary className="cursor-pointer select-none hover:text-zinc-200">
                 저장 포맷 (고급)
               </summary>
@@ -774,7 +774,7 @@ export function UpscaleDialog({
                     key={f.value}
                     type="button"
                     onClick={() => setFormat(f.value)}
-                    className={`flex-1 rounded-md border py-1.5 text-[11px] transition-colors active:scale-95 ${
+                    className={`flex-1 rounded-md border py-1.5 text-xs transition-colors active:scale-95 ${
                       format === f.value
                         ? 'border-indigo-500 bg-indigo-500/15 text-indigo-300'
                         : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:bg-zinc-800'
@@ -798,7 +798,7 @@ export function UpscaleDialog({
                   />
                 </label>
               )}
-              <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600">
+              <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-600">
                 DPI 정보가 결과 파일에 포함되어 인쇄 프로그램에서 실제 cm 크기로 인식돼요. 투명
                 배경은 PNG·WebP에서만 보존됩니다.
               </p>

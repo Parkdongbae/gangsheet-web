@@ -1741,3 +1741,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    of your accepting any such warranty or additional liability.
 
    END OF TERMS AND CONDITIONS
+
+================================================================================
+웹 버전 추가 구성요소 (v0.5.0 — 브라우저 내 AI 배경 제거)
+================================================================================
+
+onnxruntime-web 1.31.1 — MIT License
+  Copyright (c) Microsoft Corporation
+  https://github.com/microsoft/onnxruntime
+
+ISNet general-use 모델 가중치 (실행 시 다운로드, 번들 미포함)
+  배포: https://huggingface.co/imgly/isnet-general-onnx — MIT License
+  원 연구: Highly Accurate Dichotomous Image Segmentation (DIS), Xuebin Qin et al.
+  https://github.com/xuebinqin/DIS — Apache License 2.0

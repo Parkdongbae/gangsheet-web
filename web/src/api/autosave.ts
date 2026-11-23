@@ -3,8 +3,9 @@
  *
  * ProxyCanvas가 씬 변경마다 dispatch하는 dtf:scene-committed 이벤트(Electron에서는
  * 수신자 없는 inert 훅)를 받아 1.5초 디바운스 후 ProjectData(dataUrl 제거)를
- * IndexedDB kv에 기록한다. 부팅 시 기록이 있으면 복원 여부를 묻고 기존
- * dtf:open-project E2E 이벤트 경로로 되살린다(이미지는 vfs가 IndexedDB에서 복원).
+ * IndexedDB kv에 기록한다. 복원은 시작 화면의 "이어서 작업하기" 카드가
+ * window.api.getResumableSession()으로 조회해 openProject로 연다(이미지는 vfs가
+ * IndexedDB에서 복원).
  *
  * 빈 씬(이미지 0개)은 기록하지 않는다 — 새 문서 화면 진입이 직전 자동저장을
  * 덮어쓰는 사고를 막기 위해서다.
@@ -15,10 +16,9 @@ import {
   validateProjectData,
   type ProjectData
 } from '@core/project'
-import { kvGet, kvSet } from './vfs'
+import { kvSet } from './vfs'
 
 const AUTOSAVE_KEY = 'autosave-project'
-const AUTOSAVE_PATH = 'web-autosave://last'
 const DEBOUNCE_MS = 1500
 
 export interface SceneCommittedDetail {
@@ -86,21 +86,4 @@ export function installAutosave(): void {
       scheduleFlush(detail)
     }
   })
-}
-
-/** 앱 마운트 직후 호출 — 이전 자동저장이 있으면 복원 여부 확인 후 열기 이벤트 발행 */
-export async function bootAutosaveRestore(): Promise<void> {
-  const saved = await kvGet<{ data: ProjectData; savedAt: number }>(AUTOSAVE_KEY)
-  if (!saved?.data || !Array.isArray(saved.data.images) || saved.data.images.length === 0) return
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-  })
-  if (
-    !window.confirm(
-      '이전 웹 작업 내용이 있습니다. 복원하시겠습니까?\n(취소하면 새 문서 화면으로 시작합니다)'
-    )
-  ) {
-    return
-  }
-  window.dispatchEvent(new CustomEvent('dtf:open-project', { detail: AUTOSAVE_PATH }))
 }

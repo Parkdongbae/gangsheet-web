@@ -11,6 +11,8 @@ import {
   Grid2x2,
   Grid3x3,
   ImagePlus,
+  Keyboard,
+  Layers,
   LayoutGrid,
   Maximize,
   Minus,
@@ -28,6 +30,9 @@ import { GridSettingsDialog } from './GridSettingsDialog'
 import { NestingDialog } from './NestingDialog'
 import { RulerOverlay } from './RulerOverlay'
 import { BgSitesDialog } from '../BgSitesDialog'
+import { ShortcutsDialog } from '../ShortcutsDialog'
+import { ThemeToggle } from '../ThemeToggle'
+import { useTheme } from '../../theme'
 import { UpscaleDialog } from '../UpscaleDialog'
 import { packImages } from './autoNesting'
 import {
@@ -79,7 +84,12 @@ import { useHtmlImage } from './useHtmlImage'
 import { PropertiesPanel } from '../PropertiesPanel'
 import { mmToPx, pxToMm } from '../../../../core/math'
 import { physicalDocPixels } from '../../../../core/imageMeta'
-import type { ImportedImage, UpscaledImage } from '../../../../types/ipc'
+import type {
+  BgRemovalMode,
+  ImportedImage,
+  RemoveBgProgress,
+  UpscaledImage
+} from '../../../../types/ipc'
 import { PROJECT_FORMAT, PROJECT_VERSION, type ProjectData } from '../../../../core/project'
 
 /**
@@ -284,6 +294,28 @@ export function ProxyCanvas({
   const [gridOpen, setGridOpen] = useState(false)
   const [gridSettingsOpen, setGridSettingsOpen] = useState(false)
   const [bgSitesOpen, setBgSitesOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const theme = useTheme()
+  /** 배경 제거 방식 — 구현이 여러 방식을 제공할 때만(웹) 선택 UI를 노출한다 */
+  const bgModes = window.api.bgRemovalModes
+  const [bgMode, setBgMode] = useState<BgRemovalMode>(() => {
+    try {
+      return localStorage.getItem('dtf:bg-mode') === 'solid' ? 'solid' : 'ai'
+    } catch {
+      return 'ai'
+    }
+  })
+  const changeBgMode = useCallback((mode: BgRemovalMode): void => {
+    setBgMode(mode)
+    try {
+      localStorage.setItem('dtf:bg-mode', mode)
+    } catch {
+      /* 저장 실패는 세션 내 상태로만 동작 */
+    }
+  }, [])
+  /** 배경 제거 세부 단계(모델 다운로드 %, 분석 중 등) — 웹 구현만 알림 */
+  const [bgStage, setBgStage] = useState<RemoveBgProgress | null>(null)
+  useEffect(() => window.api.onRemoveBgProgress?.(setBgStage), [])
   /** 업스케일 대화상자 — 열림 시점의 항목 id·원본 경로를 캡처해 치환 정합성 유지 */
   const [upscaleTarget, setUpscaleTarget] = useState<{ id: string; filePath: string } | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
@@ -513,6 +545,8 @@ export function ProxyCanvas({
         gridOpen ||
         gridSettingsOpen ||
         bgSitesOpen ||
+        shortcutsOpen ||
+        shortcutsOpen ||
         exportOpen ||
         nestingOpen ||
         upscaleTarget !== null ||
@@ -536,7 +570,15 @@ export function ProxyCanvas({
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
     }
-  }, [gridOpen, gridSettingsOpen, bgSitesOpen, exportOpen, nestingOpen, upscaleTarget])
+  }, [
+    gridOpen,
+    gridSettingsOpen,
+    bgSitesOpen,
+    shortcutsOpen,
+    exportOpen,
+    nestingOpen,
+    upscaleTarget
+  ])
 
   /**
    * .dtf 프로젝트 저장 — 씬을 dataUrl 없는 스키마로 직렬화해 메인에 위임
@@ -713,6 +755,7 @@ export function ProxyCanvas({
       gridOpen ||
       gridSettingsOpen ||
       bgSitesOpen ||
+      shortcutsOpen ||
       exportOpen ||
       nestingOpen ||
       upscaleTarget !== null
@@ -798,6 +841,7 @@ export function ProxyCanvas({
     gridOpen,
     gridSettingsOpen,
     bgSitesOpen,
+    shortcutsOpen,
     exportOpen,
     nestingOpen,
     upscaleTarget,
@@ -1429,7 +1473,10 @@ export function ProxyCanvas({
       const failures: string[] = []
       for (const [index, target] of targets.entries()) {
         try {
-          const result = await window.api.removeBackground(target.filePath)
+          const result = await window.api.removeBackground(
+            target.filePath,
+            bgModes ? { mode: bgMode } : undefined
+          )
           let filePath = result.filePath
           let dataUrl = result.dataUrl
           let trimmed: RemovedBgEntry['trimmed'] = null
@@ -1469,11 +1516,12 @@ export function ProxyCanvas({
       }
       setRemoveBusy(false)
       setRemoveProgress(null)
+      setBgStage(null)
       if (failures.length > 0) {
         alert(`배경 제거 실패 ${failures.length}/${targets.length}건:\n${failures.join('\n')}`)
       }
     })()
-  }, [images, selectedIds, removeBusy, autoTrim, setImages, commitImages])
+  }, [images, selectedIds, removeBusy, autoTrim, bgModes, bgMode, setImages, commitImages])
 
   /**
    * 업스케일 완료 치환 — 결과(DPI 메타 포함 PNG)를 새 에셋으로 교체한다(removeBg
@@ -1608,455 +1656,508 @@ export function ProxyCanvas({
   )
 
   return (
-    <div
-      className="fixed inset-0 flex overflow-hidden bg-zinc-950"
-      style={{ cursor: panning ? 'grabbing' : spaceDown ? 'grab' : 'default' }}
-    >
-      <div
-        ref={viewportRef}
-        className="relative min-w-0 flex-1"
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={handleDrop}
-      >
-        <Stage
-          ref={stageRef}
-          width={size.w}
-          height={size.h}
-          scaleX={view.scale}
-          scaleY={view.scale}
-          x={view.x}
-          y={view.y}
-          draggable={spaceDown}
-          onWheel={handleWheel}
-          onDragMove={handleDragMove}
-          onDragEnd={handleDragEnd}
-          onMouseDown={handleStageMouseDown}
-          onMouseMove={handleStageMouseMove}
-          onContextMenu={handleStageContextMenu}
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-zinc-950">
+      {/* 상단 바 1행 — 문서·파일·실행취소 · 우측 도움말/테마/내보내기 */}
+      <header className="z-[5] flex h-14 shrink-0 select-none items-center gap-1.5 overflow-x-auto border-b border-zinc-800 bg-zinc-900 px-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white">
+          <Layers size={17} strokeWidth={2} />
+        </span>
+        <div className="ml-1 mr-2 flex min-w-0 shrink-0 items-baseline gap-1">
+          <span
+            className="max-w-[220px] truncate text-sm font-semibold text-zinc-100"
+            title={projectFileName ?? undefined}
+          >
+            {projectFileName ?? '제목 없음'}
+          </span>
+          <span className="text-xs text-zinc-500">.dtf</span>
+        </div>
+        <ToolbarDivider />
+        <OverlayButton onClick={onNewProject} title="새 파일 — 새 문서 규격으로 시작">
+          <FilePlus2 size={16} strokeWidth={1.75} />새 파일
+        </OverlayButton>
+        <OverlayButton onClick={onOpenProject} title="프로젝트 열기 (.dtf)">
+          <FolderOpen size={16} strokeWidth={1.75} />
+          열기
+        </OverlayButton>
+        <OverlayButton onClick={() => void handleSave()} title="프로젝트 저장 (.dtf) — Ctrl+S">
+          <Save size={16} strokeWidth={1.75} />
+          저장
+        </OverlayButton>
+        <ToolbarDivider />
+        <OverlayButton onClick={undo} disabled={!canUndo} title="실행취소 (Ctrl+Z)">
+          <Undo2 size={16} strokeWidth={1.75} />
+          실행취소
+        </OverlayButton>
+        <OverlayButton onClick={redo} disabled={!canRedo} title="다시실행 (Ctrl+Shift+Z)">
+          <Redo2 size={16} strokeWidth={1.75} />
+          다시실행
+        </OverlayButton>
+        <div className="min-w-2 flex-1" />
+        <OverlayButton onClick={() => setShortcutsOpen(true)} title="단축키·조작법 보기">
+          <Keyboard size={16} strokeWidth={1.75} />
+          단축키
+        </OverlayButton>
+        <ThemeToggle compact />
+        <OverlayButton
+          onClick={() => setExportOpen(true)}
+          disabled={images.length === 0}
+          title="내보내기 (PSD·PNG)"
+          primary
         >
-          <Layer>
-            {/* 가상 문서 — 실규격 350 DPI 좌표계의 흰색 Rect (테두리는 화면 2px 유지) */}
-            <Rect
-              name={DOC_BACKGROUND}
-              x={0}
-              y={0}
-              width={widthPx}
-              height={heightPx}
-              fill="#ffffff"
-              stroke="#52525b"
-              strokeWidth={2 / view.scale}
-              perfectDrawEnabled={false}
-            />
-          </Layer>
-          {checkerBg && checkerPattern && (
-            <Layer listening={false}>
-              {/* 체커보드 배경 — 투명 영역 표시 관례. 표시 전용 보기 옵션이라 내보내기와
+          <FileOutput size={16} strokeWidth={1.75} />
+          내보내기
+        </OverlayButton>
+      </header>
+
+      {/* 상단 바 2행 — 이미지 추가 · 배치 도구 · 보기 옵션 */}
+      <div className="z-[5] flex h-12 shrink-0 select-none items-center gap-1.5 overflow-x-auto border-b border-zinc-800 bg-zinc-900 px-3">
+        <OverlayButton onClick={handleImport} title="이미지 가져오기" accent>
+          <ImagePlus size={16} strokeWidth={1.75} />
+          이미지 추가
+        </OverlayButton>
+        <ToolbarDivider />
+        <ToolbarLabel>배치</ToolbarLabel>
+        <OverlayButton
+          onClick={() => setNestingOpen(true)}
+          disabled={images.length === 0}
+          title="자동 배치 (MaxRects 밀집 패킹)"
+        >
+          <Boxes size={16} strokeWidth={1.75} />
+          자동 배치
+        </OverlayButton>
+        <OverlayButton
+          onClick={() => setGridOpen(true)}
+          disabled={!selectedItem || selectedItem.locked === true}
+          title="이미지 복제"
+        >
+          <Grid3x3 size={16} strokeWidth={1.75} />
+          이미지 복제
+        </OverlayButton>
+        <OverlayButton
+          onClick={() => handleFitMode('cover')}
+          disabled={!selectedItem || selectedItem.locked === true}
+          title="화면 채우기 (cover)"
+        >
+          <Expand size={16} strokeWidth={1.75} />
+          채우기
+        </OverlayButton>
+        <OverlayButton
+          onClick={() => handleFitMode('contain')}
+          disabled={!selectedItem || selectedItem.locked === true}
+          title="안에 맞춤 (contain)"
+        >
+          <Shrink size={16} strokeWidth={1.75} />
+          안에 맞춤
+        </OverlayButton>
+        <ToolbarDivider />
+        <ToolbarLabel>보기</ToolbarLabel>
+        <OverlayButton
+          onClick={() => setGridSettingsOpen(true)}
+          active={gridSettings.visible}
+          title="그리드 표시 설정 (간격·색·선 스타일)"
+        >
+          <Grid2x2 size={16} strokeWidth={1.75} />
+          그리드
+        </OverlayButton>
+        <OverlayButton
+          onClick={() => setCheckerBg((v) => !v)}
+          active={checkerBg}
+          title="문서 배경 체커보드 토글 — 흰색 배경 이미지 경계 식별 (표시 전용)"
+        >
+          <LayoutGrid size={16} strokeWidth={1.75} />
+          투명 배경 표시
+        </OverlayButton>
+        <ToolbarDivider />
+        <OverlayButton
+          onClick={toggleAutoTrim}
+          active={autoTrim}
+          title="투명 여백 자동 제거 (Auto-Trim) — 이미지 가져오기 시 알파 경계로 잘라 배치 (토글)"
+        >
+          <Scissors size={16} strokeWidth={1.75} />
+          여백 자동 제거
+        </OverlayButton>
+      </div>
+
+      <div className="flex min-h-0 flex-1">
+        <div
+          ref={viewportRef}
+          className="dtf-workspace relative min-w-0 flex-1"
+          style={{ cursor: panning ? 'grabbing' : spaceDown ? 'grab' : 'default' }}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDrop}
+        >
+          <Stage
+            ref={stageRef}
+            width={size.w}
+            height={size.h}
+            scaleX={view.scale}
+            scaleY={view.scale}
+            x={view.x}
+            y={view.y}
+            draggable={spaceDown}
+            onWheel={handleWheel}
+            onDragMove={handleDragMove}
+            onDragEnd={handleDragEnd}
+            onMouseDown={handleStageMouseDown}
+            onMouseMove={handleStageMouseMove}
+            onContextMenu={handleStageContextMenu}
+          >
+            <Layer>
+              {/* 가상 문서 — 실규격 350 DPI 좌표계의 흰색 Rect (테두리는 화면 2px 유지) */}
+              <Rect
+                name={DOC_BACKGROUND}
+                x={0}
+                y={0}
+                width={widthPx}
+                height={heightPx}
+                fill="#ffffff"
+                stroke={theme === 'light' ? '#aab1bd' : '#52525b'}
+                strokeWidth={2 / view.scale}
+                perfectDrawEnabled={false}
+              />
+            </Layer>
+            {checkerBg && checkerPattern && (
+              <Layer listening={false}>
+                {/* 체커보드 배경 — 투명 영역 표시 관례. 표시 전용 보기 옵션이라 내보내기와
                   무관하며, 스테이지 배율 역보정으로 화면 기준 셀 크기를 일정하게 유지 */}
-              <Shape
-                sceneFunc={(ctx) => {
-                  const pattern = ctx.createPattern(checkerPattern, 'repeat')
-                  if (!pattern) return
-                  ctx.save()
-                  ctx.scale(1 / view.scale, 1 / view.scale)
-                  ctx.fillStyle = pattern
-                  ctx.fillRect(0, 0, widthPx * view.scale, heightPx * view.scale)
-                  ctx.restore()
-                }}
-                perfectDrawEnabled={false}
-              />
-            </Layer>
-          )}
-          {gridSettings.visible && (
-            <Layer listening={false}>
-              {/* 격자 오버레이 — 단일 Shape에 전체 경로를 한 번에 그린다(노드 수 폭주 방지).
+                <Shape
+                  sceneFunc={(ctx) => {
+                    const pattern = ctx.createPattern(checkerPattern, 'repeat')
+                    if (!pattern) return
+                    ctx.save()
+                    ctx.scale(1 / view.scale, 1 / view.scale)
+                    ctx.fillStyle = pattern
+                    ctx.fillRect(0, 0, widthPx * view.scale, heightPx * view.scale)
+                    ctx.restore()
+                  }}
+                  perfectDrawEnabled={false}
+                />
+              </Layer>
+            )}
+            {gridSettings.visible && (
+              <Layer listening={false}>
+                {/* 격자 오버레이 — 단일 Shape에 전체 경로를 한 번에 그린다(노드 수 폭주 방지).
                   대시·스트로크는 1/scale 보정으로 줌과 무관한 화면 1px 두께 유지 */}
-              <Shape
-                sceneFunc={(ctx, shape) => {
-                  ctx.beginPath()
-                  for (const x of gridV) {
-                    ctx.moveTo(x, 0)
-                    ctx.lineTo(x, heightPx)
-                  }
-                  for (const y of gridH) {
-                    ctx.moveTo(0, y)
-                    ctx.lineTo(widthPx, y)
-                  }
-                  ctx.strokeShape(shape)
-                }}
-                stroke={gridSettings.color}
-                strokeWidth={1 / view.scale}
-                dash={gridDash(gridSettings.lineStyle, view.scale)}
-                lineCap={gridSettings.lineStyle === 'dotted' ? 'round' : 'butt'}
-                perfectDrawEnabled={false}
-              />
-            </Layer>
-          )}
-          <Layer>
-            {images.map((placed) => (
-              <SceneImage
-                key={placed.id}
-                placed={placed}
-                draggable={!spaceDown}
-                selected={selectedIds.includes(placed.id)}
-                selectionStrokeWidth={selectionStrokeWidth}
-                onSelect={handleSelect}
-                onSelectEnd={handleSelectEnd}
-                onDragStart={handleNodeDragStart}
-                onDragMove={handleNodeDragMove}
-                onDragEnd={handleNodeDragEnd}
-                onTransform={handleTransform}
-              />
-            ))}
-            {/* 씬 전체 유일 트랜스포머 — 1개 선택: 모서리 4핸들(비율 유지 기본, Shift=자유
+                <Shape
+                  sceneFunc={(ctx, shape) => {
+                    ctx.beginPath()
+                    for (const x of gridV) {
+                      ctx.moveTo(x, 0)
+                      ctx.lineTo(x, heightPx)
+                    }
+                    for (const y of gridH) {
+                      ctx.moveTo(0, y)
+                      ctx.lineTo(widthPx, y)
+                    }
+                    ctx.strokeShape(shape)
+                  }}
+                  stroke={gridSettings.color}
+                  strokeWidth={1 / view.scale}
+                  dash={gridDash(gridSettings.lineStyle, view.scale)}
+                  lineCap={gridSettings.lineStyle === 'dotted' ? 'round' : 'butt'}
+                  perfectDrawEnabled={false}
+                />
+              </Layer>
+            )}
+            <Layer>
+              {images.map((placed) => (
+                <SceneImage
+                  key={placed.id}
+                  placed={placed}
+                  draggable={!spaceDown}
+                  selected={selectedIds.includes(placed.id)}
+                  selectionStrokeWidth={selectionStrokeWidth}
+                  onSelect={handleSelect}
+                  onSelectEnd={handleSelectEnd}
+                  onDragStart={handleNodeDragStart}
+                  onDragMove={handleNodeDragMove}
+                  onDragEnd={handleNodeDragEnd}
+                  onTransform={handleTransform}
+                />
+              ))}
+              {/* 씬 전체 유일 트랜스포머 — 1개 선택: 모서리 4핸들(비율 유지 기본, Shift=자유
                 비율) + 회전 앵커(Shift 홀드=15° 배수 스냅) · 2개 이상: 합집합 보더만
                 (이동은 노드 드래그 동기화). 트랜스포머는 절대(화면) 좌표계로 렌더 —
                 앵커·스트로크는 줌 배율과 무관하게 화면 px */}
-            <Transformer
-              ref={transformerRef}
-              resizeEnabled={isSingleSelection}
-              rotateEnabled={isSingleSelection}
-              keepRatio
-              shiftBehavior="inverted"
-              rotationSnaps={shiftDown ? ROTATION_SNAPS : []}
-              rotationSnapTolerance={7}
-              enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
-              boundBoxFunc={boundMinSize}
-              borderStroke={SELECTION_STROKE}
-              borderStrokeWidth={2}
-              anchorStroke={SELECTION_STROKE}
-            />
-          </Layer>
-          {snapOverlay && (
-            <Layer listening={false}>
-              {/* 드래그 스냅 가이드 — 정렬 성립 라인 + 인접 항목·문서와의 간격(mm) 라벨 */}
-              {snapOverlay.guides.map((guide, i) => (
-                <Line
-                  key={`snap-guide-${i}`}
-                  points={
-                    guide.axis === 'x'
-                      ? [guide.position, guide.from, guide.position, guide.to]
-                      : [guide.from, guide.position, guide.to, guide.position]
-                  }
-                  stroke={SNAP_GUIDE_STROKE}
-                  strokeWidth={1 / view.scale}
-                  dash={[6 / view.scale, 4 / view.scale]}
-                  perfectDrawEnabled={false}
-                />
-              ))}
-              {snapOverlay.labels.map((label, i) => {
-                const text = `${pxToMm(label.gapPx).toFixed(1)}mm`
-                const fontSize = 36 / view.scale
-                return (
-                  <Text
-                    key={`snap-label-${i}`}
-                    x={label.x - (text.length * fontSize * 0.62) / 2}
-                    y={label.y - fontSize * 0.7}
-                    text={text}
-                    fontSize={fontSize}
-                    fontFamily="ui-monospace, monospace"
-                    fill="#ecfeff"
-                    stroke="#155e75"
-                    strokeWidth={2.5 / view.scale}
-                    fillAfterStrokeEnabled
-                    perfectDrawEnabled={false}
-                  />
-                )
-              })}
-            </Layer>
-          )}
-          {marquee && (
-            <Layer listening={false}>
-              {/* 마키 선택 박스 — 반투명 채움 + 대시 보더 (TECH §2.1 실시간 피드백) */}
-              <Rect
-                x={Math.min(marquee.start.x, marquee.current.x)}
-                y={Math.min(marquee.start.y, marquee.current.y)}
-                width={Math.abs(marquee.current.x - marquee.start.x)}
-                height={Math.abs(marquee.current.y - marquee.start.y)}
-                fill="rgba(99,102,241,0.08)"
-                stroke={SELECTION_STROKE}
-                strokeWidth={1 / view.scale}
-                dash={[4 / view.scale, 4 / view.scale]}
-                perfectDrawEnabled={false}
+              <Transformer
+                ref={transformerRef}
+                resizeEnabled={isSingleSelection}
+                rotateEnabled={isSingleSelection}
+                keepRatio
+                shiftBehavior="inverted"
+                rotationSnaps={shiftDown ? ROTATION_SNAPS : []}
+                rotationSnapTolerance={7}
+                enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
+                boundBoxFunc={boundMinSize}
+                borderStroke={SELECTION_STROKE}
+                borderStrokeWidth={2}
+                anchorStroke={SELECTION_STROKE}
               />
             </Layer>
-          )}
-        </Stage>
+            {snapOverlay && (
+              <Layer listening={false}>
+                {/* 드래그 스냅 가이드 — 정렬 성립 라인 + 인접 항목·문서와의 간격(mm) 라벨 */}
+                {snapOverlay.guides.map((guide, i) => (
+                  <Line
+                    key={`snap-guide-${i}`}
+                    points={
+                      guide.axis === 'x'
+                        ? [guide.position, guide.from, guide.position, guide.to]
+                        : [guide.from, guide.position, guide.to, guide.position]
+                    }
+                    stroke={SNAP_GUIDE_STROKE}
+                    strokeWidth={1 / view.scale}
+                    dash={[6 / view.scale, 4 / view.scale]}
+                    perfectDrawEnabled={false}
+                  />
+                ))}
+                {snapOverlay.labels.map((label, i) => {
+                  const text = `${pxToMm(label.gapPx).toFixed(1)}mm`
+                  const fontSize = 36 / view.scale
+                  return (
+                    <Text
+                      key={`snap-label-${i}`}
+                      x={label.x - (text.length * fontSize * 0.62) / 2}
+                      y={label.y - fontSize * 0.7}
+                      text={text}
+                      fontSize={fontSize}
+                      fontFamily="ui-monospace, monospace"
+                      fill="#ecfeff"
+                      stroke="#155e75"
+                      strokeWidth={2.5 / view.scale}
+                      fillAfterStrokeEnabled
+                      perfectDrawEnabled={false}
+                    />
+                  )
+                })}
+              </Layer>
+            )}
+            {marquee && (
+              <Layer listening={false}>
+                {/* 마키 선택 박스 — 반투명 채움 + 대시 보더 (TECH §2.1 실시간 피드백) */}
+                <Rect
+                  x={Math.min(marquee.start.x, marquee.current.x)}
+                  y={Math.min(marquee.start.y, marquee.current.y)}
+                  width={Math.abs(marquee.current.x - marquee.start.x)}
+                  height={Math.abs(marquee.current.y - marquee.start.y)}
+                  fill="rgba(99,102,241,0.08)"
+                  stroke={SELECTION_STROKE}
+                  strokeWidth={1 / view.scale}
+                  dash={[4 / view.scale, 4 / view.scale]}
+                  perfectDrawEnabled={false}
+                />
+              </Layer>
+            )}
+          </Stage>
 
-        {/* 문서 바깥 자 — 상단(가로 cm)·좌측(세로 cm), 문서 범위 하이라이트 포함 */}
-        <RulerOverlay
-          view={view}
-          viewportW={size.w}
-          viewportH={size.h}
-          docW={widthPx}
-          docH={heightPx}
-        />
-
-        {/* 문서 이름 — 열거나 저장한 .dtf 파일명 (새 문서는 "제목 없음") */}
-        <div className="absolute left-3 top-8 flex select-none items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-[11px] text-zinc-300">
-          <span className="max-w-[240px] truncate font-medium" title={projectFileName ?? undefined}>
-            {projectFileName ?? '제목 없음'}
-          </span>
-          <span className="text-zinc-600">.dtf</span>
-        </div>
-
-        {/* 상태 오버레이: 문서 치수 · 현재 배율 · 툴바 — 상단 자(22px) 아래에 위치 */}
-        <div className="absolute right-3 top-8 flex select-none items-center gap-2">
-          <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-[11px] tabular-nums text-zinc-400">
-            <span>
-              {widthPx.toLocaleString()} × {heightPx.toLocaleString()} px
-            </span>
-            <span className="font-semibold text-zinc-200">{zoomPercent}%</span>
-          </div>
-          <div className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900/95 p-1 shadow-2xl backdrop-blur">
-            <OverlayButton onClick={onNewProject} title="새 파일 — 새 문서 규격으로 시작">
-              <FilePlus2 size={14} strokeWidth={1.5} />새 파일
-            </OverlayButton>
-            <OverlayButton onClick={onOpenProject} title="프로젝트 열기 (.dtf)">
-              <FolderOpen size={14} strokeWidth={1.5} />
-              열기
-            </OverlayButton>
-            <OverlayButton onClick={handleImport} title="이미지 가져오기">
-              <ImagePlus size={14} strokeWidth={1.5} />
-              가져오기
-            </OverlayButton>
-            <OverlayButton
-              onClick={toggleAutoTrim}
-              active={autoTrim}
-              title="투명 여백 자동 제거 (Auto-Trim) — 이미지 가져오기 시 알파 경계로 잘라 배치 (토글)"
-            >
-              <Scissors size={14} strokeWidth={1.5} />
-              여백 제거
-            </OverlayButton>
-            <OverlayButton onClick={() => void handleSave()} title="프로젝트 저장 (.dtf) — Ctrl+S">
-              <Save size={14} strokeWidth={1.5} />
-              저장
-            </OverlayButton>
-            <div className="mx-0.5 h-5 w-px bg-zinc-800" />
-            <OverlayButton
-              onClick={() => setGridOpen(true)}
-              disabled={!selectedItem || selectedItem.locked === true}
-              title="이미지 복제"
-            >
-              <Grid3x3 size={14} strokeWidth={1.5} />
-              이미지 복제
-            </OverlayButton>
-            <OverlayButton
-              onClick={() => setGridSettingsOpen(true)}
-              active={gridSettings.visible}
-              title="그리드 표시 설정 (간격·색·선 스타일)"
-            >
-              <Grid2x2 size={14} strokeWidth={1.5} />
-              그리드
-            </OverlayButton>
-            <OverlayButton
-              onClick={() => setCheckerBg((v) => !v)}
-              active={checkerBg}
-              title="문서 배경 체커보드 토글 — 흰색 배경 이미지 경계 식별 (표시 전용)"
-            >
-              <LayoutGrid size={14} strokeWidth={1.5} />
-              배경
-            </OverlayButton>
-            <OverlayButton
-              onClick={() => handleFitMode('cover')}
-              disabled={!selectedItem || selectedItem.locked === true}
-              title="화면 채우기 (cover)"
-            >
-              <Expand size={14} strokeWidth={1.5} />
-              채우기
-            </OverlayButton>
-            <OverlayButton
-              onClick={() => handleFitMode('contain')}
-              disabled={!selectedItem || selectedItem.locked === true}
-              title="안에 맞춤 (contain)"
-            >
-              <Shrink size={14} strokeWidth={1.5} />
-              안에 맞춤
-            </OverlayButton>
-            <div className="mx-0.5 h-5 w-px bg-zinc-800" />
-            <OverlayButton
-              onClick={() => setNestingOpen(true)}
-              disabled={images.length === 0}
-              title="자동 배치 (MaxRects 밀집 패킹)"
-            >
-              <Boxes size={14} strokeWidth={1.5} />
-              자동 배치
-            </OverlayButton>
-            <div className="mx-0.5 h-5 w-px bg-zinc-800" />
-            <OverlayButton onClick={undo} disabled={!canUndo} title="실행취소 (Ctrl+Z)">
-              <Undo2 size={14} strokeWidth={1.5} />
-              실행취소
-            </OverlayButton>
-            <OverlayButton onClick={redo} disabled={!canRedo} title="다시실행 (Ctrl+Shift+Z)">
-              <Redo2 size={14} strokeWidth={1.5} />
-              다시실행
-            </OverlayButton>
-            <div className="mx-0.5 h-5 w-px bg-zinc-800" />
-            <OverlayButton onClick={handleFit} title="문서 전체 화면 맞춤">
-              <Maximize size={14} strokeWidth={1.5} />
-              맞춤
-            </OverlayButton>
-            <div className="mx-0.5 h-5 w-px bg-zinc-800" />
-            <OverlayButton
-              onClick={() => setExportOpen(true)}
-              disabled={images.length === 0}
-              title="내보내기 (PSD·PNG)"
-              primary
-            >
-              <FileOutput size={14} strokeWidth={1.5} />
-              내보내기
-            </OverlayButton>
-          </div>
-        </div>
-
-        {gridOpen && selectedItem && (
-          <GridDialog
-            item={selectedItem}
-            widthPx={widthPx}
-            heightPx={heightPx}
-            onConfirm={handleGridConfirm}
-            onClose={() => setGridOpen(false)}
-          />
-        )}
-
-        {gridSettingsOpen && (
-          <GridSettingsDialog
-            settings={gridSettings}
-            onChange={setGridSettings}
-            onClose={() => setGridSettingsOpen(false)}
-          />
-        )}
-
-        {bgSitesOpen && <BgSitesDialog onClose={() => setBgSitesOpen(false)} />}
-        {upscaleTarget !== null && (
-          <UpscaleDialog
-            filePath={upscaleTarget.filePath}
-            onClose={() => setUpscaleTarget(null)}
-            onDone={handleUpscaleDone}
-          />
-        )}
-
-        {nestingOpen && images.length > 0 && (
-          <NestingDialog
-            items={images}
-            widthPx={widthPx}
-            heightPx={heightPx}
-            onConfirm={handleNestingConfirm}
-            onClose={() => setNestingOpen(false)}
-          />
-        )}
-
-        {exportOpen && (
-          <ExportDialog
-            items={images}
-            widthPx={widthPx}
-            heightPx={heightPx}
-            onClose={() => setExportOpen(false)}
-          />
-        )}
-
-        {menu && (
-          <ContextMenu
-            x={menu.x}
-            y={menu.y}
+          {/* 문서 바깥 자 — 상단(가로 cm)·좌측(세로 cm), 문서 범위 하이라이트 포함 */}
+          <RulerOverlay
+            view={view}
             viewportW={size.w}
             viewportH={size.h}
-            selectionCount={selectedImages.length}
-            canGroup={canGroupMenu}
-            canUngroup={canUngroupMenu}
-            alignUnitCount={alignUnitCount}
-            anyUnlocked={anySelectedUnlocked}
-            rootRef={menuRef}
-            onDuplicate={() => {
-              setMenu(null)
-              handleDuplicate()
-            }}
-            onDelete={() => {
-              setMenu(null)
-              handleDeleteSelection()
-            }}
-            onToggleLock={() => {
-              setMenu(null)
-              handleToggleLock()
-            }}
-            onGroup={() => {
-              setMenu(null)
-              handleGroup()
-            }}
-            onUngroup={() => {
-              setMenu(null)
-              handleUngroup()
-            }}
-            onAlign={(op) => {
-              setMenu(null)
-              handleAlign(op)
-            }}
-            onDocAlign={(op) => {
-              setMenu(null)
-              handleDocAlign(op)
-            }}
-            onOrder={(op) => {
-              setMenu(null)
-              handleOrder(op)
-            }}
+            docW={widthPx}
+            docH={heightPx}
           />
-        )}
 
-        {/* 조작 힌트 + 방향키 이동 거리 스텝퍼 */}
-        <div className="absolute bottom-3 left-3 flex select-none items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900/95 px-3 py-1.5 text-[11px] text-zinc-500 backdrop-blur">
-          <div className="leading-relaxed">
-            휠: 줌 · Space/휠 클릭 + 드래그: 팬 · 드래그: 이동(인접 항목·문서 가장자리 자동 스냅) ·
-            Shift 드래그: 축 고정 · Ctrl+드래그: 복제 · 빈 곳 드래그: 영역 선택 · 우클릭:
-            메뉴(정렬·문서 정렬·레이어·잠금) · 방향키: 이동(Shift: 1mm) · Ctrl+G: 그룹 ·
-            Ctrl+D/C/X/V: 복제/복사/잘라내기/붙여넣기 · Ctrl+L: 잠금 · R: 90° 회전 · Shift+회전: 15°
-            · Del: 삭제 · Ctrl+Z/Y: 실행취소·다시실행 · 이미지 드롭: 배치
-          </div>
-          <div className="flex items-center gap-1 border-l border-zinc-800 pl-3">
-            <span className="text-zinc-400">방향키 이동</span>
-            <button
-              type="button"
-              aria-label="이동 거리 1mm 감소"
-              disabled={nudgeStepMm <= NUDGE_MIN_MM}
-              onClick={() => setNudgeStepMm((v) => Math.max(NUDGE_MIN_MM, v - 1))}
-              className="flex h-5 w-5 items-center justify-center rounded border border-zinc-800 bg-zinc-900 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
-            >
-              <Minus size={11} strokeWidth={2} />
-            </button>
-            <span className="w-10 text-center tabular-nums text-zinc-200">{nudgeStepMm} mm</span>
-            <button
-              type="button"
-              aria-label="이동 거리 1mm 증가"
-              disabled={nudgeStepMm >= NUDGE_MAX_MM}
-              onClick={() => setNudgeStepMm((v) => Math.min(NUDGE_MAX_MM, v + 1))}
-              className="flex h-5 w-5 items-center justify-center rounded border border-zinc-800 bg-zinc-900 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
-            >
-              <Plus size={11} strokeWidth={2} />
-            </button>
-          </div>
+          {images.length === 0 && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
+              <div className="dtf-card-shadow pointer-events-auto flex w-full max-w-sm flex-col items-center gap-3 rounded-3xl border border-dashed border-indigo-500/60 bg-zinc-900/95 px-8 py-9 text-center backdrop-blur">
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-400">
+                  <ImagePlus size={28} strokeWidth={1.75} />
+                </span>
+                <span className="text-lg font-bold text-zinc-100">
+                  이미지를 여기에 끌어다 놓으세요
+                </span>
+                <span className="text-sm leading-relaxed text-zinc-500">
+                  여러 장을 한꺼번에 올릴 수 있어요.
+                  <br />
+                  올린 뒤 <b className="font-semibold text-zinc-300">자동 배치</b>를 누르면 빈틈없이
+                  정리됩니다.
+                </span>
+                <button
+                  type="button"
+                  onClick={handleImport}
+                  className="mt-1 flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 active:scale-[0.98]"
+                >
+                  <ImagePlus size={17} strokeWidth={2} />
+                  이미지 선택
+                </button>
+                <span className="text-xs text-zinc-500">PNG · JPG · WebP · PSD</span>
+              </div>
+            </div>
+          )}
+
+          {gridOpen && selectedItem && (
+            <GridDialog
+              item={selectedItem}
+              widthPx={widthPx}
+              heightPx={heightPx}
+              onConfirm={handleGridConfirm}
+              onClose={() => setGridOpen(false)}
+            />
+          )}
+
+          {gridSettingsOpen && (
+            <GridSettingsDialog
+              settings={gridSettings}
+              onChange={setGridSettings}
+              onClose={() => setGridSettingsOpen(false)}
+            />
+          )}
+
+          {bgSitesOpen && <BgSitesDialog onClose={() => setBgSitesOpen(false)} />}
+          {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+          {upscaleTarget !== null && (
+            <UpscaleDialog
+              filePath={upscaleTarget.filePath}
+              onClose={() => setUpscaleTarget(null)}
+              onDone={handleUpscaleDone}
+            />
+          )}
+
+          {nestingOpen && images.length > 0 && (
+            <NestingDialog
+              items={images}
+              widthPx={widthPx}
+              heightPx={heightPx}
+              onConfirm={handleNestingConfirm}
+              onClose={() => setNestingOpen(false)}
+            />
+          )}
+
+          {exportOpen && (
+            <ExportDialog
+              items={images}
+              widthPx={widthPx}
+              heightPx={heightPx}
+              onClose={() => setExportOpen(false)}
+            />
+          )}
+
+          {menu && (
+            <ContextMenu
+              x={menu.x}
+              y={menu.y}
+              viewportW={size.w}
+              viewportH={size.h}
+              selectionCount={selectedImages.length}
+              canGroup={canGroupMenu}
+              canUngroup={canUngroupMenu}
+              alignUnitCount={alignUnitCount}
+              anyUnlocked={anySelectedUnlocked}
+              rootRef={menuRef}
+              onDuplicate={() => {
+                setMenu(null)
+                handleDuplicate()
+              }}
+              onDelete={() => {
+                setMenu(null)
+                handleDeleteSelection()
+              }}
+              onToggleLock={() => {
+                setMenu(null)
+                handleToggleLock()
+              }}
+              onGroup={() => {
+                setMenu(null)
+                handleGroup()
+              }}
+              onUngroup={() => {
+                setMenu(null)
+                handleUngroup()
+              }}
+              onAlign={(op) => {
+                setMenu(null)
+                handleAlign(op)
+              }}
+              onDocAlign={(op) => {
+                setMenu(null)
+                handleDocAlign(op)
+              }}
+              onOrder={(op) => {
+                setMenu(null)
+                handleOrder(op)
+              }}
+            />
+          )}
         </div>
+
+        <PropertiesPanel
+          item={selectedItem}
+          itemCount={images.length}
+          selectedIndex={selectedIndex >= 0 ? selectedIndex : null}
+          multiSelectedCount={selectedIds.length}
+          alignUnitCount={alignUnitCount}
+          onAlign={handleAlign}
+          onDocAlign={handleDocAlign}
+          onUpdate={handleUpdateSelected}
+          onRotate90={handleRotate90}
+          onOrder={handleOrder}
+          onToggleLock={handleToggleLock}
+          onOpenGrid={() => setGridOpen(true)}
+          onRemoveBg={handleRemoveBg}
+          removeBusy={removeBusy}
+          removeProgress={removeProgress}
+          onOpenBgSites={() => setBgSitesOpen(true)}
+          bgModes={bgModes}
+          bgMode={bgMode}
+          onBgMode={changeBgMode}
+          bgStage={bgStage}
+          onOpenUpscale={() => {
+            if (selectedItem)
+              setUpscaleTarget({ id: selectedItem.id, filePath: selectedItem.filePath })
+          }}
+        />
       </div>
 
-      <PropertiesPanel
-        item={selectedItem}
-        itemCount={images.length}
-        selectedIndex={selectedIndex >= 0 ? selectedIndex : null}
-        multiSelectedCount={selectedIds.length}
-        alignUnitCount={alignUnitCount}
-        onAlign={handleAlign}
-        onDocAlign={handleDocAlign}
-        onUpdate={handleUpdateSelected}
-        onRotate90={handleRotate90}
-        onOrder={handleOrder}
-        onToggleLock={handleToggleLock}
-        onOpenGrid={() => setGridOpen(true)}
-        onRemoveBg={handleRemoveBg}
-        removeBusy={removeBusy}
-        removeProgress={removeProgress}
-        onOpenBgSites={() => setBgSitesOpen(true)}
-        onOpenUpscale={() => {
-          if (selectedItem)
-            setUpscaleTarget({ id: selectedItem.id, filePath: selectedItem.filePath })
-        }}
-      />
+      {/* 상태 바 — 문서 크기 · 조작 힌트 · 방향키 이동 거리 · 배율 */}
+      <footer className="flex h-10 shrink-0 select-none items-center gap-3 border-t border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-500">
+        <span className="tabular-nums text-zinc-300">
+          {formatDocCm(widthPx)} × {formatDocCm(heightPx)} cm
+        </span>
+        <span className="hidden tabular-nums md:inline">
+          {widthPx.toLocaleString()} × {heightPx.toLocaleString()} px
+        </span>
+        <span className="tabular-nums">이미지 {images.length}개</span>
+        <span className="hidden min-w-0 flex-1 truncate text-center lg:inline">
+          휠: 확대·축소 · Space+드래그: 화면 이동 · 우클릭: 정렬·잠금 메뉴
+        </span>
+        <div className="ml-auto flex items-center gap-1.5">
+          <span>방향키 이동</span>
+          <button
+            type="button"
+            aria-label="이동 거리 1mm 감소"
+            disabled={nudgeStepMm <= NUDGE_MIN_MM}
+            onClick={() => setNudgeStepMm((v) => Math.max(NUDGE_MIN_MM, v - 1))}
+            className="flex h-6 w-6 items-center justify-center rounded-md border border-zinc-800 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-40"
+          >
+            <Minus size={12} strokeWidth={2} />
+          </button>
+          <span className="w-11 text-center tabular-nums text-zinc-200">{nudgeStepMm} mm</span>
+          <button
+            type="button"
+            aria-label="이동 거리 1mm 증가"
+            disabled={nudgeStepMm >= NUDGE_MAX_MM}
+            onClick={() => setNudgeStepMm((v) => Math.min(NUDGE_MAX_MM, v + 1))}
+            className="flex h-6 w-6 items-center justify-center rounded-md border border-zinc-800 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-40"
+          >
+            <Plus size={12} strokeWidth={2} />
+          </button>
+        </div>
+        <div className="h-5 w-px bg-zinc-800" />
+        <span className="w-12 text-right font-semibold tabular-nums text-zinc-200">
+          {zoomPercent}%
+        </span>
+        <button
+          type="button"
+          onClick={handleFit}
+          title="문서 전체 화면 맞춤"
+          className="flex h-7 items-center gap-1.5 rounded-md border border-zinc-800 px-2.5 text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+        >
+          <Maximize size={13} strokeWidth={1.75} />
+          화면 맞춤
+        </button>
+      </footer>
     </div>
   )
 }
@@ -2082,18 +2183,22 @@ interface OverlayButtonProps {
   onClick: () => void
   disabled?: boolean
   title?: string
+  /** 화면에서 가장 중요한 행동(내보내기) — 채운 강조색 */
   primary?: boolean
+  /** 다음으로 중요한 행동(이미지 추가) — 옅은 강조색 */
+  accent?: boolean
   /** 활성 상태 강조 (토글성 버튼 — 그리드 표시 등) */
   active?: boolean
   children: React.ReactNode
 }
 
-/** 오버레이 버튼 — disabled 시 기존 관례(투명도 0.4·포인터 차단) 적용 */
+/** 상단 바 버튼 — 아이콘 + 글자 라벨. disabled 시 투명도 0.4·포인터 차단 */
 function OverlayButton({
   onClick,
   disabled = false,
   title,
   primary = false,
+  accent = false,
   active = false,
   children
 }: OverlayButtonProps): React.JSX.Element {
@@ -2104,18 +2209,32 @@ function OverlayButton({
       disabled={disabled}
       title={title}
       aria-label={title}
-      className={`flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${
+      aria-pressed={active || undefined}
+      className={`flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-sm transition-colors active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40 ${
         primary
-          ? 'border border-indigo-500 bg-indigo-600 font-medium text-white hover:bg-indigo-500'
-          : active
-            ? 'border border-indigo-500 bg-indigo-500/15 font-medium text-indigo-300 hover:bg-indigo-500/25'
-            : 'text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
+          ? 'bg-indigo-600 px-4 font-semibold text-white hover:bg-indigo-500'
+          : accent
+            ? 'border border-indigo-500/60 bg-indigo-500/10 font-semibold text-indigo-300 hover:bg-indigo-500/20'
+            : active
+              ? 'bg-indigo-500/15 font-medium text-indigo-300 hover:bg-indigo-500/25'
+              : 'text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
       }`}
     >
       {children}
     </button>
   )
 }
+
+function ToolbarDivider(): React.JSX.Element {
+  return <div className="mx-1 h-5 w-px shrink-0 bg-zinc-800" />
+}
+
+function ToolbarLabel({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return <span className="shrink-0 px-1 text-xs font-medium text-zinc-500">{children}</span>
+}
+
+/** 문서 px → cm 표기(소수 1자리, 350 DPI) */
+const formatDocCm = (px: number): string => String(Math.round((px / 350) * 2.54 * 10) / 10)
 
 /** 씬 이미지 노드 — 원본 px 크기 그대로 렌더. mousedown으로 즉선택(Ctrl=토글) 후 드래그 이동 */
 function SceneImage({

@@ -12,6 +12,11 @@ import tailwindcss from '@tailwindcss/vite'
 
 const webRoot = fileURLToPath(new URL('.', import.meta.url))
 
+const isolationHeaders = {
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Embedder-Policy': 'credentialless'
+}
+
 export default defineConfig({
   root: webRoot,
   base: './',
@@ -29,6 +34,11 @@ export default defineConfig({
     emptyOutDir: true,
     chunkSizeWarningLimit: 4096
   },
+  // onnxruntime-web은 자체 wasm을 import.meta.url 기준으로 찾으므로 사전 번들에서 제외
+  optimizeDeps: { exclude: ['onnxruntime-web'] },
+  // crossOriginIsolated — WASM 멀티스레드(WebGPU 미지원 브라우저의 AI 배경 제거 속도)용
+  server: { headers: isolationHeaders },
+  preview: { headers: isolationHeaders },
   worker: {
     format: 'es' as const
   }

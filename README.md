@@ -40,7 +40,10 @@
 - **PNG 뷰어/저장**: 투명도(Alpha Channel) 보존 인쇄 확인용 이미지 저장.
 
 ### 4. 로드맵 (Roadmap)
-- **AI 배경 제거 (Background Removal)**: 누끼 작업 자동화(rembg/u2net) — v2 범위.
+- **AI 배경 제거 (Background Removal)**: 데스크톱은 rembg(isnet-general-use) 사이드카, 웹은 브라우저 내
+  ISNet(onnxruntime-web · WebGPU/WASM) + 단색 배경 모드 — v0.5.0에서 웹판 AI 도입.
+- **밝은/어두운 테마 · 새 시작 화면 (v0.5.0)**: 기본 밝은 테마, 시작 화면·편집기 상단에서 전환.
+  기획 문서(PRD·로직 명세·와이어프레임·스키마·UX·MVP/PoC)는 [`docs/`](docs/README.md).
 - **학교-집 동시 작업 환경**: `CLOUD.md`의 Git Workflow · Dev Containers · Cloud Asset Sync.
 
 ---

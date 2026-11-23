@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { ViewTransform } from './placement'
+import { useTheme, type Theme } from '../../theme'
 import { computeRulerTicks, rulerTickLabel } from './ruler'
 
 /** 350 DPI 문서 좌표계의 1cm 문서 px — 350 / 2.54 */
@@ -8,13 +9,37 @@ const DOC_PX_PER_CM = 350 / 2.54
 /** 자 스트립 두께 (화면 px) */
 export const RULER_SIZE = 22
 
-const BG = '#18181b'
-const DOC_EXTENT_BG = '#27272a'
-const BORDER = '#3f3f46'
-const TICK_MINOR = '#52525b'
-const TICK_LABEL = '#71717a'
-const TEXT = '#a1a1aa'
-const FONT = '9px ui-monospace, Consolas, monospace'
+interface RulerPalette {
+  bg: string
+  docExtentBg: string
+  border: string
+  tickMinor: string
+  tickLabel: string
+  text: string
+}
+
+const PALETTES: Record<Theme, RulerPalette> = {
+  dark: {
+    bg: '#18181b',
+    docExtentBg: '#27272a',
+    border: '#3f3f46',
+    tickMinor: '#52525b',
+    tickLabel: '#71717a',
+    text: '#a1a1aa'
+  },
+  light: {
+    bg: '#f8f9fb',
+    docExtentBg: '#e4e7fb',
+    border: '#cdd1d9',
+    tickMinor: '#b3b9c4',
+    tickLabel: '#7b8494',
+    text: '#4a5361'
+  }
+}
+
+/** 현재 그리기 팔레트 — 이펙트가 그리기 직전에 테마에 맞춰 교체한다 */
+let P: RulerPalette = PALETTES.light
+const FONT = '10px ui-monospace, Consolas, monospace'
 
 const TICK_LABELED_LEN = 12
 const TICK_MINOR_LEN = 5
@@ -58,8 +83,11 @@ export function RulerOverlay({
 }: RulerOverlayProps): React.JSX.Element {
   const topRef = useRef<HTMLCanvasElement>(null)
   const leftRef = useRef<HTMLCanvasElement>(null)
+  const theme = useTheme()
+  const palette = PALETTES[theme]
 
   useEffect(() => {
+    P = PALETTES[theme]
     const pxPerCm = DOC_PX_PER_CM * view.scale
     const dpr = window.devicePixelRatio || 1
 
@@ -84,19 +112,19 @@ export function RulerOverlay({
         drawVerticalRuler(ctx, viewportH, pxPerCm, startCm, endCm, docY0, docY1)
       }
     }
-  }, [view, viewportW, viewportH, docW, docH])
+  }, [view, viewportW, viewportH, docW, docH, theme])
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none">
       <canvas ref={topRef} className="absolute left-0 top-0" />
       <canvas ref={leftRef} className="absolute left-0 top-0" />
       <div
-        className="absolute left-0 top-0 flex items-center justify-center border-b border-r text-[9px] font-medium text-zinc-500"
+        className="absolute left-0 top-0 flex items-center justify-center border-b border-r text-[10px] font-medium text-zinc-500"
         style={{
           width: RULER_SIZE,
           height: RULER_SIZE,
-          backgroundColor: BG,
-          borderColor: BORDER
+          backgroundColor: palette.bg,
+          borderColor: palette.border
         }}
       >
         cm
@@ -123,12 +151,12 @@ function drawHorizontalRuler(
   docX0: number,
   docX1: number
 ): void {
-  ctx.fillStyle = BG
+  ctx.fillStyle = P.bg
   ctx.fillRect(0, 0, widthPx, RULER_SIZE)
-  ctx.fillStyle = DOC_EXTENT_BG
+  ctx.fillStyle = P.docExtentBg
   ctx.fillRect(docX0, 0, docX1 - docX0, RULER_SIZE)
 
-  ctx.strokeStyle = TICK_MINOR
+  ctx.strokeStyle = P.tickMinor
   ctx.lineWidth = 1
   ctx.font = FONT
   ctx.textAlign = 'center'
@@ -138,21 +166,21 @@ function drawHorizontalRuler(
     const x = Math.round(tick.pos) + 0.5
     ctx.beginPath()
     if (tick.labeled) {
-      ctx.strokeStyle = TICK_LABEL
+      ctx.strokeStyle = P.tickLabel
       ctx.moveTo(x, RULER_SIZE - TICK_LABELED_LEN)
       ctx.lineTo(x, RULER_SIZE)
       ctx.stroke()
-      ctx.fillStyle = TEXT
+      ctx.fillStyle = P.text
       ctx.fillText(rulerTickLabel(tick.cm), tick.pos, 5.5)
     } else {
-      ctx.strokeStyle = TICK_MINOR
+      ctx.strokeStyle = P.tickMinor
       ctx.moveTo(x, RULER_SIZE - TICK_MINOR_LEN)
       ctx.lineTo(x, RULER_SIZE)
       ctx.stroke()
     }
   }
 
-  ctx.strokeStyle = BORDER
+  ctx.strokeStyle = P.border
   ctx.beginPath()
   ctx.moveTo(0, RULER_SIZE - 0.5)
   ctx.lineTo(widthPx, RULER_SIZE - 0.5)
@@ -168,9 +196,9 @@ function drawVerticalRuler(
   docY0: number,
   docY1: number
 ): void {
-  ctx.fillStyle = BG
+  ctx.fillStyle = P.bg
   ctx.fillRect(0, 0, RULER_SIZE, heightPx)
-  ctx.fillStyle = DOC_EXTENT_BG
+  ctx.fillStyle = P.docExtentBg
   ctx.fillRect(0, docY0, RULER_SIZE, docY1 - docY0)
 
   ctx.lineWidth = 1
@@ -181,26 +209,26 @@ function drawVerticalRuler(
     const y = Math.round(tick.pos) + 0.5
     ctx.beginPath()
     if (tick.labeled) {
-      ctx.strokeStyle = TICK_LABEL
+      ctx.strokeStyle = P.tickLabel
       ctx.moveTo(RULER_SIZE - TICK_LABELED_LEN, y)
       ctx.lineTo(RULER_SIZE, y)
       ctx.stroke()
       ctx.save()
-      ctx.fillStyle = TEXT
+      ctx.fillStyle = P.text
       ctx.translate(5.5, tick.pos)
       ctx.rotate(-Math.PI / 2)
       ctx.textAlign = 'center'
       ctx.fillText(rulerTickLabel(tick.cm), 0, 0)
       ctx.restore()
     } else {
-      ctx.strokeStyle = TICK_MINOR
+      ctx.strokeStyle = P.tickMinor
       ctx.moveTo(RULER_SIZE - TICK_MINOR_LEN, y)
       ctx.lineTo(RULER_SIZE, y)
       ctx.stroke()
     }
   }
 
-  ctx.strokeStyle = BORDER
+  ctx.strokeStyle = P.border
   ctx.beginPath()
   ctx.moveTo(RULER_SIZE - 0.5, 0)
   ctx.lineTo(RULER_SIZE - 0.5, heightPx)

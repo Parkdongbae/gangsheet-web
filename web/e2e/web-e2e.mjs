@@ -124,7 +124,7 @@ async function main() {
 
     // --- 배경 제거(단색 플러드필) 실측: 모서리 알파 0 · 중심 불투명 ---
     const bg = await page.evaluate(async (path) => {
-      const result = await window.api.removeBackground(path)
+      const result = await window.api.removeBackground(path, { mode: 'solid' })
       const img = new Image()
       img.src = result.dataUrl
       await img.decode()
@@ -202,7 +202,9 @@ async function main() {
       .getByRole('button', { name: '내보내기', exact: true })
       .click()
     const pdfDownload = await pdfDownloadPromise
-    const pdfText = readFileSync(await pdfDownload.path()).subarray(0, 2048).toString('latin1')
+    const pdfText = readFileSync(await pdfDownload.path())
+      .subarray(0, 2048)
+      .toString('latin1')
     assert(pdfText.startsWith('%PDF-'), 'PDF 시그니처')
     assert(
       pdfText.includes('/MediaBox [0 0 141.737 2834.743'),
@@ -242,8 +244,9 @@ async function main() {
 
     // --- 재로드 → 자동저장 복원 (IndexedDB) ---
     await new Promise((r) => setTimeout(r, 2200))
-    page.on('dialog', (dialog) => void dialog.accept())
     await page.reload({ waitUntil: 'domcontentloaded' })
+    // v0.5.0 — 확인창 대신 시작 화면의 "이어서 작업하기" 카드로 복원한다
+    await page.getByRole('button', { name: /이어서 작업하기/ }).click({ timeout: 15000 })
     // 복원 신호 = 빈 씬이 아님(내보내기 버튼 활성) + 페이지 오류 없음
     await page
       .locator('button[title="내보내기 (PSD·PNG)"]:not([disabled])')
@@ -263,7 +266,7 @@ async function main() {
     page2.on('pageerror', (err) => pageErrors.push(String(err)))
     try {
       await page2.goto(`${BASE}/?dtf-e2e-download`, { waitUntil: 'domcontentloaded' })
-      await page2.getByRole('button', { name: '열기', exact: true }).click()
+      await page2.getByRole('button', { name: /프로젝트 열기/ }).click()
       await page2.waitForSelector('input[data-dtf-picker="open-project"]', { timeout: 10000 })
       await page2.setInputFiles('input[data-dtf-picker="open-project"]', dtfPath)
       await page2

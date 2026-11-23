@@ -1,7 +1,34 @@
 # summary.md — DTF GangSheet Studio 진행 상황
-갱신: 2026-09-03 / 완료: 배경 제거 속도 최적화(alpha_matting off·isnet 기본 모델 번들·예열·개별 완료 즉시 반영) / 이전: 방향키 이동(mm)·Ctrl 드래그 복제·그룹·우클릭 메뉴(정렬 포함)
+갱신: 2026-11-23 / 완료: v0.5.0 사용자 친화 업그레이드(밝은 테마 기본·새 시작 화면·편집기 상단 바 개편·웹 AI 배경 제거·기획 문서 docs/) / 이전: 배경 제거 속도 최적화(데스크톱)
 
 ## 현재 상태
+- **v0.5.0 사용자 친화 업그레이드 (2026-11-23 요청 — "전체적으로 마음에 안 든다")**:
+  - **기획 문서**: `docs/` — PRD + 핵심 로직 명세·화면 흐름/와이어프레임·데이터 스키마·
+    피드백/UX 기획·MVP 범위/PoC (색인 docs/README.md).
+  - **테마**: 기본 밝은 테마. `theme.ts`(localStorage `dtf-theme`, `<html data-theme>`) +
+    `assets/main.css`에서 Tailwind v4 `--color-zinc-*` 등 팔레트 변수를 밝은 테마에서 재정의
+    (컴포넌트의 zinc 클래스는 그대로). 자(Ruler)·문서 테두리는 `useTheme()`로 분기.
+    **함정 해소**: 기존 `base.css`의 비레이어 `* { margin:0; font-weight:normal }`가
+    Tailwind 유틸(mt-*, font-semibold)을 전부 덮고 있었음 → 파일 삭제.
+  - **시작 화면(App.tsx)**: 전체 화면 랜딩(대표 이미지 `assets/hero.webp` — Canva 제작,
+    3단계 안내, 규격 카드, "이어서 작업하기" 카드). 자동저장 복원은 window.confirm →
+    `window.api.getResumableSession()`(웹만 구현) 카드로 대체.
+  - **편집기(ProxyCanvas JSX만 개편, 로직 불변)**: 떠 있던 버튼 묶음 → 고정 상단 바 2행
+    (파일·실행취소·단축키·테마·내보내기 / 이미지 추가·배치·보기), 하단 상태 바, 빈 캔버스
+    드롭존 안내, 단축키 텍스트 벽 → `ShortcutsDialog`. 글씨 최소 11px, 속성 패널 w-80.
+  - **웹 AI 배경 제거(신규 `web/src/api/bgRemoval/`)**: ISNet general-use ONNX를
+    onnxruntime-web으로 워커에서 실행. WebGPU(+shader-f16)면 fp16 84MB, 아니면 WASM fp32
+    168MB(둘 다 `imgly/isnet-general-onnx` MIT, 리비전 고정, Cache Storage
+    `dtf-bg-models-v1`). 후처리: fast guided filter 업샘플 → 알파 레벨 → blur-fusion
+    디프린지. "단색 배경" 모드는 경계 부분 알파·역혼합 추가. 방식 선택은 속성 패널
+    (`dtf:bg-mode`), 강제 WASM은 `dtf:bg-backend=wasm`. CSP에 wasm-unsafe-eval·huggingface
+    연결 추가, COOP/COEP 헤더(vite·vercel.json)로 WASM 멀티스레드.
+    원인이었던 결함: 웹판이 단색 플러드필뿐이라 회색 배경 인물 사진에서 흰 옷이 뚫렸음.
+  - **배경 제거 사이트**: Canva 최상단 추가, Remove.bg 삭제.
+  - **검증**: Vitest 289(신규 matting 16) · typecheck 0 · lint 오류 0 · web:build ok ·
+    web E2E 전 항목 통과(배경 제거는 단색 모드로 고정 — 헤드리스 Edge에서 AI 모드 탭 충돌,
+    원인 미확정) · 실브라우저 실측: WebGPU 첫 8.6s/이후 1.7s, WASM 첫 12.2s(1104×1428).
+  - **미검증**: Firefox/Safari 실기, Electron 데스크톱 빌드 실행(타입체크만), 저사양 PC.
 - **배경 제거 속도 최적화 (2026-09-03 요청 — 첫 실행 병목·처리 지연 접수)**:
   - **alpha_matting=False**: pymatting(CPU)은 수 GiB 단일 할당·배치 2건째
     MemoryError(2026-09-03 실측)·이미지간 엣지 품질 비일관(메모리 압박 시 1장만

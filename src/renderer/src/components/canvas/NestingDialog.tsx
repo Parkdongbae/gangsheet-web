@@ -64,7 +64,7 @@ export function NestingDialog({
 
   return (
     <div
-      className="fixed inset-0 z-10 flex items-center justify-center bg-zinc-950/70 backdrop-blur-[2px]"
+      className="fixed inset-0 z-10 flex items-center justify-center dtf-scrim"
       onMouseDown={onClose}
     >
       <form
@@ -84,7 +84,7 @@ export function NestingDialog({
 
         <div className="grid grid-cols-2 gap-2">
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
               이미지 간격
             </span>
             <div className="flex items-center rounded-md border border-zinc-800 bg-zinc-950 transition-all focus-within:ring-1 focus-within:ring-indigo-500">
@@ -98,11 +98,11 @@ export function NestingDialog({
                 onChange={(e) => setGapText(e.target.value)}
                 className={INPUT_CLASS}
               />
-              <span className="px-2 text-[10px] text-zinc-500">cm</span>
+              <span className="px-2 text-[11px] text-zinc-500">cm</span>
             </div>
           </label>
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
               회전 패킹
             </span>
             <label className="flex flex-1 cursor-pointer items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950 px-2.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-800/60">

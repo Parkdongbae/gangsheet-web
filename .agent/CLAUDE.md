@@ -91,7 +91,8 @@ export const getCanvasHeightPx = (heightInMeters: number): number => {
 ## 4. 작업 완료 조건 (Definition of Done)
 
 `SKILL.md` §4 검증 체크리스트 전부 통과 + lint/typecheck/test 통과.
-**배경 제거는 로드맵(v2) 범위** — 구현 요청 시 범위 외임을 안내할 것.
+**배경 제거는 구현 완료** — 데스크톱은 rembg 사이드카(`export-sidecar/removebg.py`), 웹은 브라우저 내
+AI(`web/src/api/bgRemoval/`, ISNet + onnxruntime-web)와 단색 배경 모드. 기획·규칙은 `docs/` 참조.
 
 ---
 

@@ -1,5 +1,5 @@
 import { installWebApi } from './api/webApi'
-import { bootAutosaveRestore, installAutosave } from './api/autosave'
+import { installAutosave } from './api/autosave'
 import './app.css'
 
 import { StrictMode } from 'react'
@@ -14,5 +14,3 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>
 )
-
-void bootAutosaveRestore()

@@ -1,20 +1,103 @@
 @import 'tailwindcss';
-@import './base.css';
 
-html {
+/*
+ * 테마 — 컴포넌트는 Tailwind zinc/indigo 클래스를 그대로 쓰고, 밝은 테마에서는
+ * 팔레트 변수 자체를 뒤집는다(zinc-950 = 앱 바탕 … zinc-100 = 가장 진한 글자).
+ * 기본값은 밝은 테마, <html data-theme="dark">일 때만 Tailwind 기본(어두운) 팔레트.
+ * 전환·저장은 src/renderer/src/theme.ts 담당.
+ */
+:root {
   color-scheme: dark;
+  --dtf-workspace: #0b0b0e;
+  --dtf-scrim: rgb(0 0 0 / 0.6);
+  --dtf-shadow: 0 10px 30px -12px rgb(0 0 0 / 0.7);
+  --dtf-hero-from: #1e1b4b;
+  --dtf-hero-to: #09090b;
+}
+
+:root:not([data-theme='dark']) {
+  color-scheme: light;
+  --dtf-workspace: #e6e8ee;
+  --dtf-scrim: rgb(15 23 42 / 0.38);
+  --dtf-shadow: 0 12px 32px -14px rgb(30 41 59 / 0.28);
+  --dtf-hero-from: #eef0ff;
+  --dtf-hero-to: #f7f8fb;
+
+  --color-zinc-950: #f3f4f7;
+  --color-zinc-900: #ffffff;
+  --color-zinc-800: #e2e5eb;
+  --color-zinc-700: #cdd1d9;
+  --color-zinc-600: #98a0ad;
+  --color-zinc-500: #646d7c;
+  --color-zinc-400: #4a5361;
+  --color-zinc-300: #353d4a;
+  --color-zinc-200: #1f2733;
+  --color-zinc-100: #111827;
+
+  --color-indigo-300: #4338ca;
+  --color-indigo-400: #4f46e5;
+  --color-amber-300: #92400e;
+  --color-amber-400: #b45309;
+  --color-red-300: #b91c1c;
+  --color-red-400: #dc2626;
+  --color-emerald-400: #047857;
+}
+
+html,
+body,
+#root {
+  height: 100%;
 }
 
 body {
   margin: 0;
-  background: #09090b; /* zinc-950 */
-  color: #e4e4e7; /* zinc-200 */
+  background: var(--color-zinc-950);
+  color: var(--color-zinc-200);
   font-family:
+    'Pretendard Variable',
+    Pretendard,
     system-ui,
     -apple-system,
     'Segoe UI',
     'Malgun Gothic',
+    'Apple SD Gothic Neo',
     sans-serif;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+button:not(:disabled),
+select,
+label[for],
+[role='button'] {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-indigo-500);
+  outline-offset: 2px;
+}
+
+/* 캔버스 작업 영역 바탕 — 흰 문서가 떠 보이도록 패널보다 한 톤 어둡게 */
+.dtf-workspace {
+  background: var(--dtf-workspace);
+}
+
+/* 다이얼로그 뒤 가림막 — 테마와 무관하게 어둡게 깔아 초점을 모은다 */
+.dtf-scrim {
+  background: var(--dtf-scrim);
+  backdrop-filter: blur(2px);
+}
+
+.dtf-card-shadow {
+  box-shadow: var(--dtf-shadow);
+}
+
+.dtf-hero {
+  background:
+    radial-gradient(60rem 30rem at 15% -10%, var(--dtf-hero-from), transparent 70%),
+    var(--dtf-hero-to);
 }
 
 ::-webkit-scrollbar {
@@ -23,19 +106,19 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #09090b; /* zinc-950 */
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a; /* zinc-800 */
+  background: var(--color-zinc-700);
   border-radius: 5px;
-  border: 2px solid #09090b;
+  border: 2px solid var(--color-zinc-950);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46; /* zinc-700 */
+  background: var(--color-zinc-600);
 }
 
 ::-webkit-scrollbar-corner {
-  background: #09090b;
+  background: transparent;
 }
