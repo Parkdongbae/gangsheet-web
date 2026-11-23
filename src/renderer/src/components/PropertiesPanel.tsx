@@ -199,17 +199,79 @@ const DOC_ALIGN_BUTTONS: ReadonlyArray<{ op: DocAlignOp; label: string }> = [
 ]
 
 function bgStageLabel(stage: RemoveBgProgress | null): string {
-  if (!stage) return '처리 중…'
+  if (!stage) return '처리 중'
   switch (stage.stage) {
     case 'download':
-      return `AI 모델 받는 중 ${Math.round((stage.ratio ?? 0) * 100)}%`
+      return 'AI 모델 내려받는 중 (처음 한 번)'
     case 'init':
-      return 'AI 준비 중…'
+      return 'AI 준비 중'
     case 'infer':
-      return '배경 분석 중…'
+      return '배경 분석 중'
+    case 'refine':
+      return '경계 다듬는 중'
     default:
-      return '경계 다듬는 중…'
+      return '결과 저장 중'
   }
+}
+
+function formatEta(seconds: number): string {
+  if (seconds < 60) return `약 ${seconds}초 남음`
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  return rest === 0 ? `약 ${minutes}분 남음` : `약 ${minutes}분 ${rest}초 남음`
+}
+
+/** 배경 제거 진행 상자 — 단계 · 전체 % · 남은 시간(웹) / 단계 정보가 없으면(데스크톱) 진행 중 표시만 */
+function BgProgress({
+  stage,
+  batch
+}: {
+  stage: RemoveBgProgress | null
+  batch: { current: number; total: number } | null
+}): React.JSX.Element {
+  const percent = stage?.percent
+  const batchText =
+    batch && batch.total > 1
+      ? `${Math.min(batch.current + 1, batch.total)}번째 / 전체 ${batch.total}개`
+      : null
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="mt-2 rounded-md border border-indigo-500/40 bg-indigo-500/10 px-2.5 py-2"
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-xs font-medium text-zinc-200">{bgStageLabel(stage)}</span>
+        {percent !== undefined && (
+          <span className="text-sm font-bold tabular-nums text-indigo-300">{percent}%</span>
+        )}
+      </div>
+      <div
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-800"
+      >
+        <div
+          className={`h-full rounded-full bg-indigo-500 transition-[width] duration-300 ease-out ${
+            percent === undefined ? 'w-full animate-pulse' : ''
+          }`}
+          style={percent === undefined ? undefined : { width: `${percent}%` }}
+        />
+      </div>
+      <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] tabular-nums text-zinc-500">
+        <span>
+          {stage?.etaSeconds !== undefined
+            ? formatEta(stage.etaSeconds)
+            : stage
+              ? '남은 시간 계산 중…'
+              : '잠시만 기다려 주세요'}
+        </span>
+        {batchText && <span>{batchText}</span>}
+      </div>
+    </div>
+  )
 }
 
 const BG_MODE_LABELS: Record<BgRemovalMode, { label: string; hint: string }> = {
@@ -282,11 +344,8 @@ export function PropertiesPanel({
   const multi = !item && multiSelectedCount >= 2
   const canDistribute = alignUnitCount >= 3
   /** 진행 중 라벨 — 배치면 n/N, 단일이면 스피너만 */
-  const batchSuffix =
-    removeProgress && removeProgress.total > 1
-      ? ` (${Math.min(removeProgress.current + 1, removeProgress.total)}/${removeProgress.total})`
-      : ''
-  const removeBusyLabel = `${bgStageLabel(bgStage)}${batchSuffix}`
+  const removeBusyLabel = '처리 중…'
+  const bgProgress = removeBusy ? <BgProgress stage={bgStage} batch={removeProgress} /> : null
   const bgModePicker =
     bgModes && bgModes.length > 1 ? (
       <BgModePicker modes={bgModes} value={bgMode} onChange={onBgMode} disabled={removeBusy} />
@@ -448,6 +507,7 @@ export function PropertiesPanel({
               )}
               {removeBusy ? removeBusyLabel : `배경 제거 (${multiSelectedCount}개)`}
             </button>
+            {bgProgress}
             <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
               선택한 {multiSelectedCount}개를 차례로 처리합니다. {bgHelp} 전체를 Ctrl+Z 한 번으로
               되돌릴 수 있습니다.
@@ -659,6 +719,7 @@ export function PropertiesPanel({
               )}
               {removeBusy ? removeBusyLabel : '배경 제거'}
             </button>
+            {bgProgress}
             <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
               {bgHelp} Ctrl+Z로 되돌릴 수 있습니다.
             </p>

@@ -42,6 +42,10 @@ export interface RemoveBgOptions {
 export interface RemoveBgProgress {
   stage: 'download' | 'init' | 'infer' | 'refine' | 'encode'
   ratio?: number
+  /** 전체 진행률 0..100 (예측 포함) */
+  percent?: number
+  /** 예상 남은 시간(초) — 예측 불가 구간이면 생략 */
+  etaSeconds?: number
 }
 
 /** 배경 제거 결과 — 처리된 32-bit RGBA PNG가 새 원본이 된다 (치수는 입력과 동일) */
